@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Multi-Session API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+            min-height: 100vh;
+        }
+        .main-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .session-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            transition: transform 0.2s;
+        }
+        .session-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            font-size: 0.8em;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+        .status-connected { background: #d4edda; color: #155724; }
+        .status-disconnected { background: #f8d7da; color: #721c24; }
+        .status-initializing { background: #fff3cd; color: #856404; }
+        .status-qr-ready { background: #d1ecf1; color: #0c5460; }
+        .qr-container {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+        .qr-code {
+            max-width: 250px;
+            height: auto;
+            border: 2px solid #25D366;
+            border-radius: 10px;
+        }
+        .message-container {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .message-item {
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #25D366;
+        }
+        .message-item.outgoing {
+            border-left-color: #128C7E;
+            background: #e8f5e8;
+        }
+        .btn-whatsapp {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            border: none;
+            color: white;
+        }
+        .btn-whatsapp:hover {
+            background: linear-gradient(135deg, #128C7E, #25D366);
+            color: white;
+        }
+        .api-info {
+            background: #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-10">
+                <div class="main-container">
+                    
+                    <!-- Header -->
+                    <div class="header">
+                        <h1><i class="fab fa-whatsapp"></i> WhatsApp Multi-Session API</h1>
+                        <p class="mb-0">Gestiona múltiples instancias de WhatsApp Web simultáneamente</p>
+                    </div>
+
+                    <!-- Información de la API -->
+                    <div class="container p-4">
+                        <div class="api-info">
+                            <h5><i class="fas fa-info-circle"></i> Información del Servidor</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>URL:</strong> <span id="serverUrl"></span></p>
+                                    <p><strong>API Key:</strong> <code id="apiKey">whatsapp-api-key-2024</code></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Sesiones Activas:</strong> <span id="activeSessions">0</span></p>
+                                    <p><strong>Estado:</strong> <span id="serverStatus" class="badge bg-success">En línea</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Crear Nueva Sesión -->
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5><i class="fas fa-plus"></i> Nueva Sesión</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label for="sessionIdInput" class="form-label">ID de Sesión</label>
+                                            <input type="text" class="form-control" id="sessionIdInput" placeholder="mi-sesion-01">
+                                        </div>
+                                        <button class="btn btn-whatsapp w-100" onclick="createSession()">
+                                            <i class="fas fa-play"></i> Crear Sesión
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Enviar Mensaje de Prueba -->
+                                <div class="card mt-3">
+                                    <div class="card-header bg-success text-white">
+                                        <h5><i class="fas fa-paper-plane"></i> Enviar Mensaje</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="mb-3">
+                                            <label for="sendSessionId" class="form-label">Sesión</label>
+                                            <select class="form-control" id="sendSessionId">
+                                                <option value="">Seleccionar sesión...</option>
+                                            </select>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="phoneNumber" class="form-label">Número (con código de país)</label>
+                                            <input type="text" class="form-control" id="phoneNumber" placeholder="5491123456789">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="messageText" class="form-label">Mensaje</label>
+                                            <textarea class="form-control" id="messageText" rows="3" placeholder="Hola, este es un mensaje de prueba..."></textarea>
+                                        </div>
+                                        <button class="btn btn-success w-100" onclick="sendMessage()">
+                                            <i class="fas fa-paper-plane"></i> Enviar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sesiones Activas -->
+                            <div class="col-md-8">
+                                <div class="card">
+                                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                                        <h5><i class="fas fa-list"></i> Sesiones Activas</h5>
+                                        <button class="btn btn-light btn-sm" onclick="refreshSessions()">
+                                            <i class="fas fa-sync-alt"></i> Actualizar
+                                        </button>
+                                    </div>
+                                    <div class="card-body">
+                                        <div id="sessionsContainer">
+                                            <div class="text-center text-muted p-4">
+                                                <i class="fas fa-mobile-alt fa-3x mb-3"></i>
+                                                <p>No hay sesiones activas. Crea una nueva sesión para comenzar.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Documentación API -->
+                        <div class="card mt-4">
+                            <div class="card-header bg-dark text-white">
+                                <h5><i class="fas fa-code"></i> Documentación API</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="accordion" id="apiAccordion">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#endpoints">
+                                                Endpoints Disponibles
+                                            </button>
+                                        </h2>
+                                        <div id="endpoints" class="accordion-collapse collapse" data-bs-parent="#apiAccordion">
+                                            <div class="accordion-body">
+                                                <h6>Autenticación</h6>
+                                                <p>Usa el header <code>X-API-Key</code> con valor: <code>whatsapp-api-key-2024</code></p>
+                                                
+                                                <h6>Endpoints:</h6>
+                                                <ul>
+                                                    <li><code>POST /api/start-session</code> - Crear nueva sesión</li>
+                                                    <li><code>GET /api/qr/:sessionId</code> - Obtener código QR</li>
+                                                    <li><code>GET /api/status/:sessionId</code> - Estado de la sesión</li>
+                                                    <li><code>GET /api/sessions</code> - Listar todas las sesiones</li>
+                                                    <li><code>POST /api/send-message</code> - Enviar mensaje de texto</li>
+                                                    <li><code>POST /api/send-media</code> - Enviar archivos multimedia</li>
+                                                    <li><code>GET /api/messages/:sessionId</code> - Obtener mensajes</li>
+                                                    <li><code>POST /api/logout/:sessionId</code> - Cerrar sesión</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#examples">
+                                                Ejemplos de Uso
+                                            </button>
+                                        </h2>
+                                        <div id="examples" class="accordion-collapse collapse" data-bs-parent="#apiAccordion">
+                                            <div class="accordion-body">
+                                                <h6>Crear Sesión:</h6>
+                                                <pre><code>curl -X POST http://localhost:3000/api/start-session \
+  -H "X-API-Key: whatsapp-api-key-2024" \
+  -H "Content-Type: application/json" \
+  -d '{"sessionId": "mi-sesion-01"}'</code></pre>
+                                                
+                                                <h6>Enviar Mensaje:</h6>
+                                                <pre><code>curl -X POST http://localhost:3000/api/send-message \
+  -H "X-API-Key: whatsapp-api-key-2024" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sessionId": "mi-sesion-01",
+    "number": "5491123456789",
+    "message": "Hola desde la API!"
+  }'</code></pre>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor de notificaciones -->
+    <div id="notifications" class="notification"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
