@@ -24,11 +24,13 @@ const io = socketIo(server, {
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || 'whatsapp-api-key-2024';
 
-// Middleware de seguridad - configuración más permisiva para desarrollo
+// Middleware de seguridad - configuración simplificada sin HTTPS
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginOpenerPolicy: false,
-  crossOriginResourcePolicy: false
+  crossOriginResourcePolicy: false,
+  hsts: false, // Deshabilitar HTTPS Strict Transport Security
+  crossOriginEmbedderPolicy: false
 }));
 app.use(compression());
 app.use(morgan('combined'));

@@ -22,78 +22,90 @@ else
     echo "✅ Node.js ya está instalado: $(node --version)"
 fi
 
-# Instalar dependencias del sistema para Puppeteer/Chromium
-echo "🔧 Instalando dependencias del sistema para Puppeteer..."
+# Instalar dependencias básicas
+echo "🔧 Instalando dependencias básicas..."
 apt-get install -y \
     wget \
-    gnupg \
-    ca-certificates \
-    procps \
-    libxss1 \
-    libgconf-2-4 \
-    libxrandr2 \
+    curl \
+    unzip \
+    software-properties-common
+
+# Instalar dependencias mínimas para Puppeteer
+echo "🎭 Instalando dependencias mínimas para Puppeteer..."
+apt-get install -y \
+    gconf-service \
     libasound2 \
-    libpangocairo-1.0-0 \
     libatk1.0-0 \
-    libcairo-gobject2 \
-    libgtk-3-0 \
+    libc6 \
+    libcairo2 \
+    libcups2 \
+    libdbus-1-3 \
+    libexpat1 \
+    libfontconfig1 \
+    libgcc1 \
+    libgconf-2-4 \
     libgdk-pixbuf2.0-0 \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libnspr4 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libstdc++6 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
     libxcomposite1 \
     libxcursor1 \
     libxdamage1 \
     libxext6 \
     libxfixes3 \
     libxi6 \
-    libxinerama1 \
+    libxrandr2 \
+    libxrender1 \
+    libxss1 \
     libxtst6 \
+    ca-certificates \
+    fonts-liberation \
     libappindicator1 \
     libnss3 \
     lsb-release \
-    xdg-utils \
-    fonts-liberation \
-    libappindicator3-1 \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libdrm2 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libxss1 \
-    libxtst6 \
-    xvfb \
-    libgbm-dev \
-    libxshmfence1 \
-    chromium-browser
+    xdg-utils
 
-# Instalar PM2 para gestión de procesos (opcional)
-echo "🔄 Instalando PM2 para gestión de procesos..."
+# NO instalar Chromium del sistema, dejar que Puppeteer use su propia versión
+echo "ℹ️  Configurando para usar Chromium integrado de Puppeteer..."
+
+# Instalar PM2 para gestión de procesos
+echo "🔄 Instalando PM2..."
 npm install -g pm2
 
-# Crear usuario para ejecutar la aplicación (opcional, por seguridad)
-if ! id "whatsapp" &>/dev/null; then
-    echo "👤 Creando usuario 'whatsapp' para ejecutar la aplicación..."
-    useradd -r -s /bin/false whatsapp
-fi
+# Verificar instalaciones
+echo "🔍 Verificando instalaciones..."
+echo "Node.js: $(node --version)"
+echo "NPM: $(npm --version)"
+echo "PM2: $(pm2 --version)"
 
-# Crear directorio de la aplicación
-APP_DIR="/opt/whatsapp-api"
-if [ ! -d "$APP_DIR" ]; then
-    echo "📁 Creando directorio de la aplicación en $APP_DIR"
-    mkdir -p $APP_DIR
-    chown whatsapp:whatsapp $APP_DIR
-fi
+# Configurar límites del sistema para evitar problemas
+echo "⚙️  Configurando límites del sistema..."
+cat >> /etc/security/limits.conf << EOF
+* soft nofile 65536
+* hard nofile 65536
+* soft nproc 65536  
+* hard nproc 65536
+EOF
 
 echo ""
 echo "✅ Instalación completada!"
 echo ""
 echo "📋 Próximos pasos:"
-echo "1. Copia los archivos de la aplicación al directorio deseado"
-echo "2. Ejecuta: npm install"
-echo "3. Opcional: cp .env.example .env (y configura las variables)"
-echo "4. Ejecuta: node server.js"
+echo "1. Ir al directorio de tu aplicación WhatsApp"
+echo "2. Ejecutar: npm install"
+echo "3. Opcional: cp .env.example .env"
+echo "4. Ejecutar: node server.js"
 echo ""
-echo "💡 Para producción, se recomienda usar PM2:"
-echo "   pm2 start server.js --name whatsapp-api"
-echo "   pm2 startup"
-echo "   pm2 save"
+echo "⚠️  IMPORTANTE:"
+echo "- NO se instaló Chromium del sistema"
+echo "- Puppeteer descargará su propia versión de Chromium"
+echo "- Esto evita conflictos de dependencias"
 echo ""
+echo "🚀 Comando rápido:"
+echo "   npm install && node server.js"
