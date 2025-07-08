@@ -43,8 +43,13 @@ RUN npm install --only=production
 # Copiar código fuente
 COPY . .
 
-# Crear directorio para sesiones
-RUN mkdir -p sessions
+# Usuario no root para seguridad
+RUN groupadd -r whatsapp && useradd -r -g whatsapp -s /bin/false whatsapp
+
+# Crear directorios para sesiones con permisos correctos
+RUN mkdir -p sessions .wwebjs_auth .wwebjs_cache
+RUN chown -R whatsapp:whatsapp /usr/src/app
+USER whatsapp
 
 # Exponer puerto
 EXPOSE 3000
@@ -53,11 +58,6 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV API_KEY=whatsapp-api-key-2024
-
-# Usuario no root para seguridad
-RUN groupadd -r whatsapp && useradd -r -g whatsapp -s /bin/false whatsapp
-RUN chown -R whatsapp:whatsapp /usr/src/app
-USER whatsapp
 
 # Comando de inicio
 CMD ["node", "server.js"]
