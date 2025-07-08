@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Configurar Socket.IO events
     setupSocketEvents();
     
+    // Configurar eventos de archivos
+    setupFileEvents();
+    
     // Auto-refresh cada 30 segundos
     setInterval(refreshSessions, 30000);
 });
@@ -51,9 +54,14 @@ function setupSocketEvents() {
 
     socket.on('message', (data) => {
         console.log('Nuevo mensaje recibido:', data);
-        showNotification(`Nuevo mensaje en ${data.sessionId}`, 'info');
-        if (document.getElementById(`messages-${data.sessionId}`)) {
-            loadSessionMessages(data.sessionId);
+        const message = data.message || data;
+        showNotification(`Nuevo mensaje en ${message.sessionId || data.sessionId}`, 'info');
+        
+        // Actualizar mensajes en tiempo real si la vista está abierta
+        const sessionId = message.sessionId || data.sessionId;
+        const messagesContainer = document.getElementById(`messages-${sessionId}`);
+        if (messagesContainer && messagesContainer.style.display !== 'none') {
+            addMessageToContainer(sessionId, message);
         }
     });
 
@@ -302,7 +310,7 @@ async function loadSessionMessages(sessionId) {
     const container = document.getElementById(`messages-${sessionId}`);
     
     try {
-        const response = await fetch(`${BASE_URL}/api/messages/${sessionId}?limit=20`, {
+        const response = await fetch(`${BASE_URL}/api/messages/${sessionId}?limit=50`, {
             headers: {
                 'X-API-Key': API_KEY
             }
@@ -320,21 +328,82 @@ async function loadSessionMessages(sessionId) {
                 `;
             } else {
                 container.innerHTML = `
-                    <h6><i class="fas fa-comments"></i> Últimos mensajes (${data.messages.length})</h6>
-                    ${data.messages.map(msg => `
-                        <div class="message-item ${msg.from.includes('@c.us') ? '' : 'outgoing'}">
-                            <strong>${msg.contact?.name || msg.from}</strong>
-                            <small class="text-muted float-end">${new Date(msg.timestamp * 1000).toLocaleString()}</small>
-                            <p class="mb-1">${msg.body}</p>
-                            ${msg.isMedia ? '<small class="text-info"><i class="fas fa-paperclip"></i> Archivo adjunto</small>' : ''}
-                        </div>
-                    `).join('')}
+                    <h6><i class="fas fa-comments"></i> Mensajes recientes (${data.messages.length})</h6>
+                    <div id="messages-list-${sessionId}" class="messages-list">
+                        ${data.messages.map(msg => renderMessage(msg)).join('')}
+                    </div>
                 `;
             }
         }
     } catch (error) {
         console.error('Error cargando mensajes:', error);
         container.innerHTML = '<div class="alert alert-danger">Error cargando mensajes</div>';
+    }
+}
+
+// Renderizar un mensaje individual
+function renderMessage(msg) {
+    const isIncoming = msg.from && msg.from.includes('@c.us');
+    const time = new Date(msg.timestamp * 1000).toLocaleString();
+    const contactName = msg.contact?.name || msg.from || 'Desconocido';
+    
+    let mediaContent = '';
+    if (msg.isMedia && msg.media) {
+        const { mimetype, data, filename } = msg.media;
+        
+        if (mimetype.startsWith('image/')) {
+            mediaContent = `
+                <div class="media-preview">
+                    <img src="data:${mimetype};base64,${data}" alt="${filename}" 
+                         class="img-thumbnail" style="max-width: 200px; max-height: 200px;">
+                </div>
+            `;
+        } else if (mimetype.startsWith('audio/')) {
+            mediaContent = `
+                <div class="media-preview">
+                    <audio controls class="w-100">
+                        <source src="data:${mimetype};base64,${data}" type="${mimetype}">
+                    </audio>
+                </div>
+            `;
+        } else {
+            mediaContent = `
+                <div class="media-preview">
+                    <div class="file-attachment">
+                        <i class="fas fa-file"></i>
+                        <span>${filename}</span>
+                        <a href="data:${mimetype};base64,${data}" download="${filename}" 
+                           class="btn btn-sm btn-outline-primary ms-2">
+                            <i class="fas fa-download"></i> Descargar
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    return `
+        <div class="message-item ${isIncoming ? 'incoming' : 'outgoing'}">
+            <div class="message-header">
+                <strong>${contactName}</strong>
+                <small class="text-muted float-end">${time}</small>
+            </div>
+            ${msg.body ? `<p class="message-body">${msg.body}</p>` : ''}
+            ${mediaContent}
+        </div>
+    `;
+}
+
+// Agregar mensaje en tiempo real
+function addMessageToContainer(sessionId, message) {
+    const listContainer = document.getElementById(`messages-list-${sessionId}`);
+    if (listContainer) {
+        const messageHtml = renderMessage(message);
+        listContainer.insertAdjacentHTML('beforeend', messageHtml);
+        
+        // Scroll hacia abajo
+        const container = document.getElementById(`messages-${sessionId}`);
+        container.scrollTop = container.scrollHeight;
     }
 }
 
@@ -374,6 +443,113 @@ async function sendMessage() {
     } catch (error) {
         console.error('Error enviando mensaje:', error);
         showNotification('Error al enviar mensaje', 'danger');
+    }
+}
+
+// Configurar eventos de archivos
+function setupFileEvents() {
+    const mediaFile = document.getElementById('mediaFile');
+    const mediaPreview = document.getElementById('mediaPreview');
+    const previewContent = document.getElementById('previewContent');
+    
+    if (mediaFile) {
+        mediaFile.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                showFilePreview(file, previewContent);
+                mediaPreview.style.display = 'block';
+            } else {
+                mediaPreview.style.display = 'none';
+            }
+        });
+    }
+}
+
+// Mostrar vista previa del archivo
+function showFilePreview(file, container) {
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        let previewHtml = '';
+        
+        if (file.type.startsWith('image/')) {
+            previewHtml = `
+                <img src="${e.target.result}" alt="Preview" 
+                     class="img-thumbnail" style="max-width: 200px; max-height: 200px;">
+            `;
+        } else if (file.type.startsWith('audio/')) {
+            previewHtml = `
+                <audio controls class="w-100">
+                    <source src="${e.target.result}" type="${file.type}">
+                </audio>
+            `;
+        } else {
+            previewHtml = `
+                <div class="file-info">
+                    <i class="fas fa-file fa-2x"></i>
+                    <p><strong>${file.name}</strong></p>
+                    <p>Tamaño: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    <p>Tipo: ${file.type || 'Desconocido'}</p>
+                </div>
+            `;
+        }
+        
+        container.innerHTML = previewHtml;
+    };
+    
+    reader.readAsDataURL(file);
+}
+
+// Enviar archivo multimedia
+async function sendMedia() {
+    const sessionId = document.getElementById('sendSessionId').value;
+    const number = document.getElementById('phoneNumber').value.trim();
+    const mediaFile = document.getElementById('mediaFile').files[0];
+    const caption = document.getElementById('mediaCaption').value.trim();
+    
+    if (!sessionId || !number || !mediaFile) {
+        showNotification('Por favor completa todos los campos y selecciona un archivo', 'warning');
+        return;
+    }
+
+    // Verificar tamaño del archivo (50MB máximo)
+    if (mediaFile.size > 50 * 1024 * 1024) {
+        showNotification('El archivo es demasiado grande. Máximo 50MB permitido.', 'warning');
+        return;
+    }
+
+    try {
+        const formData = new FormData();
+        formData.append('sessionId', sessionId);
+        formData.append('number', number);
+        formData.append('media', mediaFile);
+        if (caption) {
+            formData.append('caption', caption);
+        }
+
+        showNotification('Enviando archivo...', 'info');
+
+        const response = await fetch(`${BASE_URL}/api/send-media`, {
+            method: 'POST',
+            headers: {
+                'X-API-Key': API_KEY
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification(`Archivo enviado exitosamente a ${number}`, 'success');
+            document.getElementById('mediaFile').value = '';
+            document.getElementById('mediaCaption').value = '';
+            document.getElementById('mediaPreview').style.display = 'none';
+        } else {
+            showNotification(`Error enviando archivo: ${data.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Error enviando archivo:', error);
+        showNotification('Error al enviar archivo', 'danger');
     }
 }
 

@@ -344,9 +344,10 @@ class SessionManager {
     for (const [sessionId, session] of this.sessions.entries()) {
       sessions.push({
         sessionId,
-        status: session.status,
+        status: session.status || 'unknown',
         connectedAt: session.connectedAt,
-        hasQR: this.qrCodes.has(sessionId)
+        hasQR: this.qrCodes.has(sessionId),
+        messageCount: this.messages.has(sessionId) ? this.messages.get(sessionId).length : 0
       });
     }
     return sessions;

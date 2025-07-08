@@ -76,6 +76,53 @@
             border-left-color: #128C7E;
             background: #e8f5e8;
         }
+        .message-item.incoming {
+            border-left-color: #25D366;
+            background: #f0f8f0;
+        }
+        .messages-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .media-preview img {
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .file-attachment {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .message-header {
+            margin-bottom: 5px;
+        }
+        .message-body {
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+        .file-info {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 2px dashed #dee2e6;
+        }
+        .nav-tabs .nav-link {
+            color: #6c757d;
+        }
+        .nav-tabs .nav-link.active {
+            color: #25D366;
+            border-color: #25D366;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
         .btn-whatsapp {
             background: linear-gradient(135deg, #25D366, #128C7E);
             border: none;
@@ -161,13 +208,52 @@
                                             <label for="phoneNumber" class="form-label">Número (con código de país)</label>
                                             <input type="text" class="form-control" id="phoneNumber" placeholder="5491123456789">
                                         </div>
-                                        <div class="mb-3">
-                                            <label for="messageText" class="form-label">Mensaje</label>
-                                            <textarea class="form-control" id="messageText" rows="3" placeholder="Hola, este es un mensaje de prueba..."></textarea>
+                                        
+                                        <!-- Tabs para tipo de mensaje -->
+                                        <ul class="nav nav-tabs mb-3" id="messageTypeTabs" role="tablist">
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link active" id="text-tab" data-bs-toggle="tab" data-bs-target="#text-pane" type="button">
+                                                    <i class="fas fa-font"></i> Texto
+                                                </button>
+                                            </li>
+                                            <li class="nav-item" role="presentation">
+                                                <button class="nav-link" id="media-tab" data-bs-toggle="tab" data-bs-target="#media-pane" type="button">
+                                                    <i class="fas fa-file"></i> Archivo
+                                                </button>
+                                            </li>
+                                        </ul>
+                                        
+                                        <div class="tab-content" id="messageTypeContent">
+                                            <!-- Pestaña Texto -->
+                                            <div class="tab-pane fade show active" id="text-pane">
+                                                <div class="mb-3">
+                                                    <label for="messageText" class="form-label">Mensaje</label>
+                                                    <textarea class="form-control" id="messageText" rows="3" placeholder="Hola, este es un mensaje de prueba..."></textarea>
+                                                </div>
+                                                <button class="btn btn-success w-100" onclick="sendMessage()">
+                                                    <i class="fas fa-paper-plane"></i> Enviar Mensaje
+                                                </button>
+                                            </div>
+                                            
+                                            <!-- Pestaña Archivo -->
+                                            <div class="tab-pane fade" id="media-pane">
+                                                <div class="mb-3">
+                                                    <label for="mediaFile" class="form-label">Seleccionar Archivo</label>
+                                                    <input type="file" class="form-control" id="mediaFile" accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="mediaCaption" class="form-label">Descripción (opcional)</label>
+                                                    <textarea class="form-control" id="mediaCaption" rows="2" placeholder="Descripción del archivo..."></textarea>
+                                                </div>
+                                                <div id="mediaPreview" class="mb-3" style="display: none;">
+                                                    <h6>Vista previa:</h6>
+                                                    <div id="previewContent"></div>
+                                                </div>
+                                                <button class="btn btn-success w-100" onclick="sendMedia()">
+                                                    <i class="fas fa-file-upload"></i> Enviar Archivo
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button class="btn btn-success w-100" onclick="sendMessage()">
-                                            <i class="fas fa-paper-plane"></i> Enviar
-                                        </button>
                                     </div>
                                 </div>
                             </div>

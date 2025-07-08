@@ -93,17 +93,22 @@ module.exports = (sessionManager) => {
     try {
       const sessions = sessionManager.getAllSessions();
       
+      console.log(`📋 Listando ${sessions.length} sesiones`);
+      
       res.json({
         success: true,
         sessions,
         total: sessions.length,
-        active: sessions.filter(s => s.status === 'connected').length
+        active: sessions.filter(s => s.status === 'connected').length,
+        timestamp: new Date().toISOString()
       });
 
     } catch (error) {
+      console.error('Error obteniendo sesiones:', error);
       res.status(500).json({
         success: false,
-        error: error.message
+        error: error.message,
+        timestamp: new Date().toISOString()
       });
     }
   });
@@ -158,6 +163,7 @@ module.exports = (sessionManager) => {
         media = `data:${req.file.mimetype};base64,${base64Data}`;
         options.mimetype = req.file.mimetype;
         options.filename = req.file.originalname;
+        options.fileSize = req.file.size;
       } else if (mediaBase64) {
         // Base64 desde body
         media = mediaBase64;
@@ -180,6 +186,8 @@ module.exports = (sessionManager) => {
         success: true,
         sessionId,
         number,
+        mediaType: options.mimetype,
+        fileName: options.filename,
         ...result
       });
 
