@@ -11,50 +11,101 @@ Una API REST completa para gestionar múltiples instancias de WhatsApp Web simul
 - **WebSocket en tiempo real**: Notificaciones instantáneas de nuevos mensajes
 - **Soporte multimedia**: Envío y recepción de imágenes, audios, documentos
 - **Autenticación por API Key**: Seguridad básica incluida
-- **Docker Ready**: Configuración completa para despliegue con Docker
+- **Compatible con Ubuntu**: Instalación directa sin Docker
 
 ## 📋 Requisitos
 
-- Node.js 16+ o Docker
+- Ubuntu 18.04+ / Debian 10+
+- Node.js 16+ 
 - 2GB+ RAM disponible
 - Conexión a internet estable
 
-## 🛠️ Instalación y Uso
+## 🛠️ Instalación en Ubuntu
 
-### Con Docker (Recomendado)
+### 1. Instalación automática de dependencias
 
-1. **Clona o crea el proyecto**:
 ```bash
-mkdir whatsapp-api && cd whatsapp-api
-# Copia todos los archivos del proyecto aquí
+# Ejecutar como root
+sudo bash install.sh
 ```
 
-2. **Ejecuta con Docker Compose**:
+Este script instalará:
+- Node.js y npm
+- Chromium y dependencias de Puppeteer
+- PM2 para gestión de procesos
+- Todas las librerías del sistema necesarias
+
+### 2. Instalación manual (alternativa)
+
+Si prefieres instalar manualmente:
+
 ```bash
-docker compose up -d
+# Instalar Node.js
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+
+# Instalar Chromium y dependencias
+sudo apt-get update
+sudo apt-get install -y chromium-browser \
+  libxss1 libgconf-2-4 libxrandr2 libasound2 \
+  libpangocairo-1.0-0 libatk1.0-0 libcairo-gobject2 \
+  libgtk-3-0 libgdk-pixbuf2.0-0 libxcomposite1 \
+  libxcursor1 libxdamage1 libxext6 libxfixes3 \
+  libxi6 libxinerama1 libxtst6 libappindicator1 \
+  libnss3 lsb-release xdg-utils fonts-liberation \
+  libappindicator3-1 libatk-bridge2.0-0 libdrm2 \
+  libnspr4 xvfb libgbm-dev libxshmfence1
+
+# Instalar PM2 globalmente (opcional)
+sudo npm install -g pm2
 ```
 
-3. **Accede a la aplicación**:
-   - Interfaz web: http://localhost:3000
-   - API: http://localhost:3000/api/
+### 3. Configuración del proyecto
 
-### Instalación Manual
-
-1. **Instala dependencias**:
 ```bash
+# Clonar o descargar el proyecto
+cd /path/to/whatsapp-api
+
+# Instalar dependencias de Node.js
 npm install
-```
 
-2. **Configura variables de entorno** (opcional):
-```bash
+# Configurar variables de entorno (opcional)
 cp .env.example .env
-# Edita .env con tus configuraciones
+nano .env  # Editar configuración si es necesario
 ```
 
-3. **Inicia el servidor**:
+### 4. Ejecutar la aplicación
+
+#### Modo desarrollo:
 ```bash
-npm start
+node server.js
 ```
+
+#### Modo producción con PM2:
+```bash
+# Iniciar con PM2
+pm2 start server.js --name whatsapp-api
+
+# Configurar para iniciar automáticamente
+pm2 startup
+pm2 save
+
+# Ver logs
+pm2 logs whatsapp-api
+
+# Reiniciar
+pm2 restart whatsapp-api
+
+# Detener
+pm2 stop whatsapp-api
+```
+
+## 🌐 Acceso a la aplicación
+
+Una vez iniciada, accede a:
+- **Interfaz web**: http://localhost:3000
+- **API**: http://localhost:3000/api/
+- **Health check**: http://localhost:3000/info
 
 ## 📚 Documentación API
 
@@ -137,23 +188,18 @@ La interfaz web está disponible en `http://localhost:3000` e incluye:
 
 ## ⚙️ Configuración
 
-### Variables de Entorno
+### Variables de Entorno (.env)
 
 ```bash
 PORT=3000                           # Puerto del servidor
 API_KEY=whatsapp-api-key-2024      # Clave de autenticación
 WEBHOOK_URL=http://example.com/webhook  # URL para reenviar mensajes (opcional)
 NODE_ENV=production                 # Entorno de ejecución
+PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser  # Ruta de Chromium
+SESSIONS_DIR=./sessions            # Directorio de sesiones
+CACHE_DIR=./.wwebjs_cache         # Directorio de cache
+AUTH_DIR=./.wwebjs_auth           # Directorio de autenticación
 ```
-
-### Docker Compose Personalizado
-
-Puedes modificar `docker-compose.yml` para:
-
-- Cambiar puertos de acceso
-- Configurar webhook URL
-- Añadir volúmenes adicionales
-- Integrar con bases de datos
 
 ## 🔄 Webhooks
 
@@ -179,7 +225,7 @@ Los mensajes se envían en formato:
   "type": "chat",
   "timestamp": 1640995200,
   "contact": {
-    "name": "Juan Pérez",
+    "name": "Juan Pérez", 
     "number": "5491123456789"
   },
   "media": {
@@ -193,19 +239,28 @@ Los mensajes se envían en formato:
 ## 🛡️ Seguridad
 
 - **Autenticación por API Key**: Protege todos los endpoints
-- **Rate limiting**: Previene abuso de la API
-- **Validación de entrada**: Sanitiza todos los datos recibidos
-- **Ejecutión sin privilegios**: El contenedor Docker no usa root
+- **Firewall**: Configura UFW para permitir solo el puerto 3000
+- **Usuario dedicado**: Ejecuta la aplicación con usuario sin privilegios
+- **Permisos de archivos**: Configuración automática de permisos
+
+### Configuración básica de firewall:
+```bash
+sudo ufw allow 3000
+sudo ufw enable
+```
 
 ## 📊 Monitoreo
 
-### Logs
+### Logs con PM2
 ```bash
-# Ver logs del contenedor
-docker compose logs -f whatsapp-api
+# Ver logs en tiempo real
+pm2 logs whatsapp-api
 
-# Logs en tiempo real
-docker compose logs -f --tail=100 whatsapp-api
+# Ver logs específicos
+pm2 logs whatsapp-api --lines 100
+
+# Monitoreo del sistema
+pm2 monit
 ```
 
 ### Health Check
@@ -213,8 +268,8 @@ docker compose logs -f --tail=100 whatsapp-api
 # Estado de salud
 curl http://localhost:3000/info
 
-# Health check del contenedor
-docker compose exec whatsapp-api curl http://localhost:3000/api/health
+# Health check de la API
+curl -H "X-API-Key: whatsapp-api-key-2024" http://localhost:3000/api/health
 ```
 
 ## 🔧 Mantenimiento
@@ -222,50 +277,92 @@ docker compose exec whatsapp-api curl http://localhost:3000/api/health
 ### Backup de Sesiones
 ```bash
 # Respaldar directorio de sesiones
-tar -czf sessions-backup-$(date +%Y%m%d).tar.gz ./sessions
+tar -czf sessions-backup-$(date +%Y%m%d).tar.gz ./sessions ./.wwebjs_auth ./.wwebjs_cache
 ```
 
 ### Limpiar Sesiones
 ```bash
-# Detener contenedores
-docker compose down
+# Detener aplicación
+pm2 stop whatsapp-api
 
 # Limpiar sesiones
-rm -rf ./sessions/*
+rm -rf ./sessions/* ./.wwebjs_auth/* ./.wwebjs_cache/*
 
 # Reiniciar
-docker compose up -d
+pm2 restart whatsapp-api
 ```
 
-### Actualizar
+### Actualizar Dependencias
 ```bash
-# Reconstruir imagen
-docker compose build --no-cache
+# Actualizar paquetes npm
+npm update
 
-# Reiniciar con nueva imagen
-docker compose up -d
+# Reinstalar módulos de Node.js (si hay problemas)
+rm -rf node_modules package-lock.json
+npm install
 ```
 
 ## 🐛 Solución de Problemas
 
 ### Problemas Comunes
 
-1. **Error de conexión a WhatsApp**:
-   - Verifica que el código QR se haya escaneado correctamente
-   - Asegúrate de tener conexión a internet estable
+1. **Error de permisos en directorios**:
+   ```bash
+   sudo chown -R $USER:$USER ./sessions ./.wwebjs_auth ./.wwebjs_cache
+   chmod -R 755 ./sessions ./.wwebjs_auth ./.wwebjs_cache
+   ```
 
-2. **Sesión se desconecta constantemente**:
-   - Revisa que el volumen de sesiones esté montado correctamente
-   - Verifica que no hay otra instancia de WhatsApp Web activa
+2. **Chromium no encontrado**:
+   ```bash
+   # Verificar instalación
+   which chromium-browser
+   
+   # Reinstalar si es necesario
+   sudo apt-get install --reinstall chromium-browser
+   ```
 
-3. **Error de memoria**:
-   - Aumenta la RAM disponible para Docker
-   - Reduce el número de sesiones simultáneas
+3. **Puerto en uso**:
+   ```bash
+   # Verificar qué proceso usa el puerto 3000
+   sudo lsof -i :3000
+   
+   # Cambiar puerto en .env
+   PORT=3001
+   ```
+
+4. **Problemas de memoria**:
+   ```bash
+   # Aumentar memoria swap si es necesario
+   sudo fallocate -l 2G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   ```
 
 ### Logs de Debug
 ```bash
-# Habilitar logs detallados
-docker compose exec whatsapp-api npm run dev
+# Ejecutar en modo debug
+DEBUG=* node server.js
+
+# O con PM2
+pm2 start server.js --name whatsapp-api-debug -- --inspect
+```
+
+## 🚀 Inicio Rápido
+
+Para usuarios experimentados:
+
+```bash
+# 1. Ejecutar instalación de dependencias
+sudo bash install.sh
+
+# 2. Instalar dependencias de Node.js
+npm install
+
+# 3. Iniciar aplicación
+node server.js
+
+# 4. Acceder a http://localhost:3000
 ```
 
 ## 📝 Contribución
@@ -286,8 +383,8 @@ Para soporte o preguntas:
 
 - Crea un issue en GitHub
 - Revisa la documentación en `/api/health`
-- Verifica los logs del contenedor
+- Verifica los logs de PM2
 
 ---
 
-⚡ **¡Listo para usar!** Ejecuta `docker compose up -d` y comienza a gestionar múltiples instancias de WhatsApp Web.
+⚡ **¡Listo para usar!** Ejecuta `bash install.sh && npm install && node server.js` y comienza a gestionar múltiples instancias de WhatsApp Web.

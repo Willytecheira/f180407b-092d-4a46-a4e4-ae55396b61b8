@@ -114,9 +114,26 @@ server.listen(PORT, () => {
 📋 Usa el header X-API-Key para autenticación
   `);
   
-  // Crear directorio de sesiones si no existe
-  fs.ensureDirSync('./sessions');
-  console.log('📁 Directorio de sesiones verificado');
+// Crear directorios necesarios si no existen
+  const directories = [
+    process.env.SESSIONS_DIR || './sessions',
+    process.env.CACHE_DIR || './.wwebjs_cache', 
+    process.env.AUTH_DIR || './.wwebjs_auth'
+  ];
+  
+  directories.forEach(dir => {
+    fs.ensureDirSync(dir);
+    // Configurar permisos en Linux
+    if (process.platform === 'linux') {
+      try {
+        fs.chmodSync(dir, 0o755);
+      } catch (error) {
+        console.warn(`⚠️ No se pudieron configurar permisos para ${dir}:`, error.message);
+      }
+    }
+  });
+  
+  console.log('📁 Directorios verificados:', directories.join(', '));
 });
 
 // Manejo de cierre graceful
