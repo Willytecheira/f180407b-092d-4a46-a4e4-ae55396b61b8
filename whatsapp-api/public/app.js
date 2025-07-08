@@ -121,6 +121,8 @@ async function createSession() {
         return;
     }
 
+    console.log('Creando sesión con ID:', sessionId);
+
     try {
         const response = await fetch(`${BASE_URL}/api/start-session`, {
             method: 'POST',
@@ -130,6 +132,8 @@ async function createSession() {
             },
             body: JSON.stringify({ sessionId })
         });
+        
+        console.log('Respuesta del servidor:', response.status, response.statusText);
 
         const data = await response.json();
 
