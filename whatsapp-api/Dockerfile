@@ -1,7 +1,8 @@
+
 # Imagen base de Node.js
 FROM node:18-slim
 
-# Instalar dependencias del sistema para Puppeteer
+# Instalar dependencias del sistema para Puppeteer y Chrome
 RUN apt-get update && apt-get install -y \
     wget \
     gnupg \
@@ -28,6 +29,19 @@ RUN apt-get update && apt-get install -y \
     libnss3 \
     lsb-release \
     xdg-utils \
+    fonts-liberation \
+    libappindicator3-1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libxss1 \
+    libxtst6 \
+    xvfb \
+    libgbm-dev \
+    libxshmfence1 \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -39,6 +53,10 @@ COPY package*.json ./
 
 # Instalar dependencias
 RUN npm install --only=production
+
+# Instalar Chromium explícitamente para Puppeteer
+RUN apt-get update && apt-get install -y chromium \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copiar código fuente
 COPY . .
@@ -58,6 +76,8 @@ EXPOSE 3000
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV API_KEY=whatsapp-api-key-2024
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 # Comando de inicio
 CMD ["node", "server.js"]

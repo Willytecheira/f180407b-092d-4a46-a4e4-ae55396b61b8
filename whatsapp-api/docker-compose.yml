@@ -1,3 +1,4 @@
+
 version: '3.8'
 
 services:
@@ -10,6 +11,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - API_KEY=whatsapp-api-key-2024
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       # - WEBHOOK_URL=http://tu-webhook-url.com/endpoint
     volumes:
       # Persistir sesiones de WhatsApp
@@ -20,6 +23,8 @@ services:
     shm_size: 2gb
     security_opt:
       - seccomp:unconfined
+    cap_add:
+      - SYS_ADMIN
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/info"]
       interval: 30s
