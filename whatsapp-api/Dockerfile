@@ -66,6 +66,9 @@ RUN groupadd -r whatsapp && useradd -r -g whatsapp -s /bin/false whatsapp
 
 # Crear directorios para sesiones con permisos correctos
 RUN mkdir -p sessions .wwebjs_auth .wwebjs_cache
+RUN mkdir -p /usr/src/app/.wwebjs_auth && chmod -R 777 /usr/src/app/.wwebjs_auth
+RUN mkdir -p /usr/src/app/.wwebjs_cache && chmod -R 777 /usr/src/app/.wwebjs_cache
+RUN mkdir -p /usr/src/app/sessions && chmod -R 777 /usr/src/app/sessions
 RUN chown -R whatsapp:whatsapp /usr/src/app
 USER whatsapp
 
