@@ -254,5 +254,107 @@ module.exports = (sessionManager) => {
     });
   });
 
-  return router;
+  // POST /api/:sessionId/webhook - Configurar webhook dinámicamente
+  router.post('/:sessionId/webhook', async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      const { url, events } = req.body;
+      
+      if (!sessionId) {
+        return res.status(400).json({
+          success: false,
+          error: 'sessionId es requerido'
+        });
+      }
+
+      // Verificar que la sesión existe
+      const session = sessionManager.getSessionStatus(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: `Sesión ${sessionId} no encontrada`
+        });
+      }
+
+      // Configurar webhook para la sesión específica
+      const result = await sessionManager.configureWebhook(sessionId, url, events);
+      
+      res.json({
+        success: true,
+        sessionId,
+        message: 'Webhook configurado exitosamente',
+        webhookUrl: url,
+        events: events || ['all'],
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error(`Error configurando webhook para ${req.params.sessionId}:`, error);
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // GET /api/:sessionId/webhook - Obtener configuración de webhook
+  router.get('/:sessionId/webhook', (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Verificar que la sesión existe
+      const session = sessionManager.getSessionStatus(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: `Sesión ${sessionId} no encontrada`
+        });
+      }
+
+      const webhookConfig = sessionManager.getWebhookConfig(sessionId);
+      
+      res.json({
+        success: true,
+        sessionId,
+        ...webhookConfig
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
+  // DELETE /api/:sessionId/webhook - Eliminar webhook
+  router.delete('/:sessionId/webhook', async (req, res) => {
+    try {
+      const { sessionId } = req.params;
+      
+      // Verificar que la sesión existe
+      const session = sessionManager.getSessionStatus(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          error: `Sesión ${sessionId} no encontrada`
+        });
+      }
+
+      const result = await sessionManager.configureWebhook(sessionId, null, null);
+      
+      res.json({
+        success: true,
+        sessionId,
+        message: 'Webhook eliminado exitosamente',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
 };

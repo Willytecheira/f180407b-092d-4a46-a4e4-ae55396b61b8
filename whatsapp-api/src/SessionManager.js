@@ -8,14 +8,21 @@ class SessionManager {
     this.sessions = new Map();
     this.qrCodes = new Map();
     this.messages = new Map();
+    this.webhooks = new Map(); // Nuevo: webhooks por sesión
     this.io = io;
     this.webhookUrl = process.env.WEBHOOK_URL || null;
     
-    // 📁 Crear carpeta de uploads si no existe
-    this.uploadsDir = path.join(__dirname, '../public/uploads');
-    if (!fs.existsSync(this.uploadsDir)) {
-      fs.mkdirSync(this.uploadsDir, { recursive: true });
-      console.log('📁 Carpeta de uploads creada:', this.uploadsDir);
+    // Crear directorio de uploads si no existe
+    this.ensureUploadsDirectory();
+  }
+  
+  async ensureUploadsDirectory() {
+    try {
+      const uploadsPath = path.join(process.cwd(), 'public', 'uploads');
+      await fs.ensureDir(uploadsPath);
+      console.log('📁 Directorio uploads verificado:', uploadsPath);
+    } catch (error) {
+      console.error('Error creando directorio uploads:', error);
     }
   }
 
@@ -169,43 +176,53 @@ class SessionManager {
       sessionId
     };
 
-    // 🎯 PROCESAR MULTIMEDIA Y GUARDAR EN SERVIDOR
+    // Procesar media si existe
     if (message.hasMedia) {
       try {
+        console.log(`📎 Descargando media para mensaje ${message.id._serialized}`);
         const media = await message.downloadMedia();
         
-        // Generar nombre único para el archivo
-        const timestamp = Date.now();
-        const extension = media.mimetype?.split('/')[1] || 'bin';
-        const originalName = media.filename || `media.${extension}`;
-        const fileName = `${timestamp}_${originalName}`;
-        const filePath = path.join(this.uploadsDir, fileName);
-        
-        // 💾 GUARDAR ARCHIVO EN SERVIDOR
-        const buffer = Buffer.from(media.data, 'base64');
-        await fs.writeFile(filePath, buffer);
-        
-        // 🌐 GENERAR URL ACCESIBLE
-        const serverIP = process.env.SERVER_IP || 'localhost';
-        const serverPort = process.env.PORT || 3000;
-        const fileUrl = `http://${serverIP}:${serverPort}/uploads/${fileName}`;
-        
-        console.log(`📁 Archivo multimedia guardado: ${fileName} (${(buffer.length / 1024).toFixed(2)} KB)`);
-        console.log(`🌐 URL: ${fileUrl}`);
-        
-        // ✅ INCLUIR METADATOS EN LUGAR DE BASE64
-        messageData.media = {
-          fileUrl: fileUrl,           // 🎯 URL del archivo accesible
-          fileName: fileName,         // Nombre único del archivo
-          originalName: originalName, // Nombre original del archivo
-          mimetype: media.mimetype,   // Tipo de archivo (image/jpeg, video/mp4, etc.)
-          fileSize: buffer.length,    // Tamaño en bytes
-          filePath: filePath         // Ruta local del archivo (para uso interno)
-        };
-        
+        if (media && media.data) {
+          // Generar nombre único para el archivo
+          const timestamp = Date.now();
+          const randomStr = Math.random().toString(36).substring(2, 8);
+          const extension = this.getFileExtension(media.mimetype);
+          const fileName = `${timestamp}_${randomStr}${extension}`;
+          const originalName = media.filename || fileName;
+          
+          // Guardar archivo en el servidor
+          const uploadsPath = path.join(process.cwd(), 'public', 'uploads');
+          const filePath = path.join(uploadsPath, fileName);
+          
+          // Convertir base64 a buffer y guardar
+          const buffer = Buffer.from(media.data, 'base64');
+          await fs.writeFile(filePath, buffer);
+          
+          // Generar URL accesible
+          const serverIP = process.env.SERVER_IP || 'localhost';
+          const serverPort = process.env.PORT || 3000;
+          const fileUrl = `http://${serverIP}:${serverPort}/uploads/${fileName}`;
+          
+          messageData.media = {
+            fileUrl,
+            fileName,
+            originalName,
+            mimetype: media.mimetype,
+            fileSize: buffer.length
+          };
+          
+          console.log(`💾 Media guardado: ${fileName} (${buffer.length} bytes)`);
+        } else {
+          console.warn(`⚠️ Media vacío para mensaje ${message.id._serialized}`);
+          messageData.media = null;
+        }
       } catch (error) {
-        console.error(`Error procesando multimedia en ${sessionId}:`, error);
-        messageData.media = null;
+        console.error(`❌ Error procesando media en ${sessionId}:`, error.message);
+        // No detener el flujo, continuar sin media
+        messageData.media = {
+          error: 'Failed to download media',
+          originalError: error.message
+        };
       }
     }
 
@@ -240,26 +257,63 @@ class SessionManager {
     });
 
     // Enviar a webhook si está configurado
-    if (this.webhookUrl) {
-      this.sendToWebhook(messageData);
-    }
+    await this.sendToWebhook(sessionId, messageData, 'message-received');
 
     console.log(`📥 Mensaje recibido en ${sessionId} de ${messageData.contact?.name || messageData.from}`);
   }
 
-  async sendToWebhook(messageData) {
+  async sendToWebhook(sessionId, messageData, eventType = 'message') {
     try {
+      // Obtener webhook específico de la sesión
+      const sessionWebhook = this.webhooks.get(sessionId);
+      let webhookUrl = null;
+      let allowedEvents = ['all'];
+
+      if (sessionWebhook && sessionWebhook.url) {
+        webhookUrl = sessionWebhook.url;
+        allowedEvents = sessionWebhook.events || ['all'];
+      } else if (this.webhookUrl) {
+        // Usar webhook global como fallback
+        webhookUrl = this.webhookUrl;
+      }
+
+      if (!webhookUrl) {
+        return; // No hay webhook configurado
+      }
+
+      // Verificar si el evento está permitido
+      if (!allowedEvents.includes('all') && !allowedEvents.includes(eventType)) {
+        console.log(`🚫 Evento ${eventType} no permitido para sesión ${sessionId}`);
+        return;
+      }
+
+      const payload = {
+        ...messageData,
+        eventType,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log(`🔔 Enviando ${eventType} al webhook para sesión ${sessionId}`);
+      
       const fetch = require('node-fetch');
-      await fetch(this.webhookUrl, {
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'User-Agent': 'WhatsApp-API-Webhook/1.0'
         },
-        body: JSON.stringify(messageData)
+        body: JSON.stringify(payload),
+        timeout: 10000 // 10 segundos timeout
       });
-      console.log('📤 Webhook enviado exitosamente');
+
+      if (response.ok) {
+        console.log(`✅ Webhook enviado exitosamente para ${sessionId} (${response.status})`);
+      } else {
+        console.error(`❌ Error en webhook para ${sessionId}: ${response.status} ${response.statusText}`);
+      }
     } catch (error) {
-      console.error('❌ Error enviando a webhook:', error);
+      console.error(`❌ Error enviando webhook para ${sessionId}:`, error.message);
+      // No relanzar el error para evitar que detenga el flujo principal
     }
   }
 
@@ -433,6 +487,60 @@ class SessionManager {
 
     await Promise.all(promises);
     console.log('✅ Todas las sesiones cerradas');
+  }
+  
+  // Métodos para manejo de webhooks dinámicos
+  async configureWebhook(sessionId, url, events) {
+    try {
+      if (url) {
+        this.webhooks.set(sessionId, {
+          url,
+          events: events || ['all'],
+          configuredAt: new Date().toISOString()
+        });
+        console.log(`🔗 Webhook configurado para sesión ${sessionId}: ${url}`);
+      } else {
+        this.webhooks.delete(sessionId);
+        console.log(`🗑️ Webhook eliminado para sesión ${sessionId}`);
+      }
+      
+      return { success: true };
+    } catch (error) {
+      console.error(`Error configurando webhook para ${sessionId}:`, error);
+      throw error;
+    }
+  }
+
+  getWebhookConfig(sessionId) {
+    const webhook = this.webhooks.get(sessionId);
+    return {
+      sessionId,
+      webhookUrl: webhook?.url || null,
+      events: webhook?.events || [],
+      configured: !!webhook,
+      configuredAt: webhook?.configuredAt || null,
+      globalWebhook: this.webhookUrl
+    };
+  }
+
+  getFileExtension(mimetype) {
+    const extensions = {
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/gif': '.gif',
+      'image/webp': '.webp',
+      'video/mp4': '.mp4',
+      'video/webm': '.webm',
+      'audio/mpeg': '.mp3',
+      'audio/ogg': '.ogg',
+      'audio/wav': '.wav',
+      'application/pdf': '.pdf',
+      'application/msword': '.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+      'text/plain': '.txt'
+    };
+    
+    return extensions[mimetype] || '.bin';
   }
 }
 
