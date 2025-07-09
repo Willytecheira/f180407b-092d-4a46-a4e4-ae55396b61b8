@@ -43,59 +43,8 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Middleware de autenticación web
-const authenticateWeb = (req, res, next) => {
-  // Permitir acceso a archivos específicos de login
-  if (req.path === '/login.html' || 
-      req.path === '/info' ||
-      req.path === '/validate-session') {
-    return next();
-  }
-  
-  // Verificar autenticación por session token en header
-  const sessionToken = req.headers['x-session-token'] || req.query.sessionToken;
-  
-  if (!sessionToken) {
-    return res.redirect('/login.html');
-  }
-  
-  // Verificar que el token sea válido (formato simple)
-  try {
-    const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
-    if (sessionData.username && sessionData.loginTime) {
-      // Token válido por 24 horas
-      const loginTime = new Date(sessionData.loginTime);
-      const now = new Date();
-      const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
-      
-      if (hoursDiff < 24) {
-        req.user = sessionData;
-        return next();
-      }
-    }
-  } catch (error) {
-    // Token inválido
-  }
-  
-  return res.redirect('/login.html');
-};
-
-// Servir archivos estáticos con protección
-app.use(express.static(path.join(__dirname, 'public'), {
-  setHeaders: (res, path, stat) => {
-    // Solo permitir login.html sin autenticación
-    if (path.endsWith('login.html')) {
-      return;
-    }
-    
-    // Para otros archivos, verificar autenticación
-    const req = res.req;
-    if (!req.headers['x-session-token'] && !req.query.sessionToken) {
-      res.redirect('/login.html');
-      return;
-    }
-  }
-}));
+// Servir archivos estáticos SIN middleware de autenticación
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Inicializar SessionManager
@@ -119,51 +68,11 @@ const authenticateAPI = (req, res, next) => {
 app.use('/api', authenticateAPI, apiRoutes(sessionManager));
 app.use('/webhook', webhookRoutes(sessionManager));
 
-// Aplicar middleware de autenticación a todas las rutas except login
-app.use((req, res, next) => {
-  // Permitir acceso sin autenticación solo a estas rutas
-  const publicRoutes = ['/login.html', '/info', '/validate-session'];
-  
-  if (publicRoutes.includes(req.path)) {
-    return next();
-  }
-  
-  // Para requests AJAX, verificar header
-  const sessionToken = req.headers['x-session-token'];
-  if (sessionToken) {
-    try {
-      const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
-      if (sessionData.username && sessionData.loginTime) {
-        const loginTime = new Date(sessionData.loginTime);
-        const now = new Date();
-        const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
-        
-        if (hoursDiff < 24) {
-          req.user = sessionData;
-          return next();
-        }
-      }
-    } catch (error) {
-      // Token inválido, continúa con validación básica
-    }
-  }
-  
-  // Para navegación normal, solo verificar que es una petición válida
-  // (la validación real se hará en el frontend via JavaScript)
-  next();
-});
-
-// Ruta principal - Interface Web (redirigir a index)
+// Rutas específicas (sin middleware global complicado)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Ruta index (página principal protegida)
-app.get('/index.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Ruta admin (ya protegida por middleware global)
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
