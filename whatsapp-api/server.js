@@ -68,9 +68,14 @@ const authenticateAPI = (req, res, next) => {
 app.use('/api', authenticateAPI, apiRoutes(sessionManager));
 app.use('/webhook', webhookRoutes(sessionManager));
 
-// Ruta principal - Interface Web
+// Ruta principal - Interface Web (redirigir a login)
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.redirect('/login.html');
+});
+
+// Ruta admin (protegida)
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 // Ruta para obtener información del servidor

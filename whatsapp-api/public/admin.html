@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - WhatsApp Multi-Session API</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+            min-height: 100vh;
+        }
+        .main-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            color: white;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: between;
+            align-items: center;
+        }
+        .header-left {
+            flex: 1;
+        }
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,255,255,0.1);
+            padding: 8px 15px;
+            border-radius: 20px;
+        }
+        .btn-logout {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            border-radius: 20px;
+            padding: 8px 15px;
+        }
+        .btn-logout:hover {
+            background: rgba(255,255,255,0.3);
+            color: white;
+        }
+        .session-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            transition: transform 0.2s;
+        }
+        .session-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            font-size: 0.8em;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+        .status-connected { background: #d4edda; color: #155724; }
+        .status-disconnected { background: #f8d7da; color: #721c24; }
+        .status-initializing { background: #fff3cd; color: #856404; }
+        .status-qr-ready { background: #d1ecf1; color: #0c5460; }
+        .btn-whatsapp {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+            border: none;
+            color: white;
+        }
+        .btn-whatsapp:hover {
+            background: linear-gradient(135deg, #128C7E, #25D366);
+            color: white;
+        }
+        .webhook-card {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .webhook-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .nav-pills .nav-link {
+            color: #6c757d;
+            border-radius: 20px;
+        }
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, #25D366, #128C7E);
+        }
+        .nav-pills .nav-link:hover {
+            background: rgba(37, 211, 102, 0.1);
+        }
+        /* ... mantener todos los otros estilos del archivo original ... */
+    </style>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row justify-content-center">
+            <div class="col-12 col-lg-11">
+                <div class="main-container">
+                    
+                    <!-- Header con logout -->
+                    <div class="header">
+                        <div class="header-left">
+                            <h3><i class="fab fa-whatsapp"></i> WhatsApp Multi-Session API</h3>
+                            <p class="mb-0">Panel de Administración</p>
+                        </div>
+                        <div class="header-right">
+                            <div class="user-info">
+                                <i class="fas fa-user"></i>
+                                <span id="currentUser">admin</span>
+                            </div>
+                            <button class="btn btn-logout" onclick="logout()">
+                                <i class="fas fa-sign-out-alt"></i> Salir
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="container p-4">
+                        <!-- Navigation Tabs -->
+                        <ul class="nav nav-pills nav-fill mb-4" id="mainTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="sessions-tab" data-bs-toggle="pill" data-bs-target="#sessions-pane" type="button">
+                                    <i class="fas fa-mobile-alt"></i> Sesiones
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="webhooks-tab" data-bs-toggle="pill" data-bs-target="#webhooks-pane" type="button">
+                                    <i class="fas fa-webhook"></i> Webhooks
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="messages-tab" data-bs-toggle="pill" data-bs-target="#messages-pane" type="button">
+                                    <i class="fas fa-paper-plane"></i> Enviar Mensajes
+                                </button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content" id="mainTabContent">
+                            
+                            <!-- Tab Sesiones -->
+                            <div class="tab-pane fade show active" id="sessions-pane">
+                                <div class="row">
+                                    <!-- Crear Nueva Sesión -->
+                                    <div class="col-md-4">
+                                        <div class="card">
+                                            <div class="card-header bg-primary text-white">
+                                                <h5><i class="fas fa-plus"></i> Nueva Sesión</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label for="sessionIdInput" class="form-label">ID de Sesión</label>
+                                                    <input type="text" class="form-control" id="sessionIdInput" placeholder="mi-sesion-01">
+                                                </div>
+                                                <button class="btn btn-whatsapp w-100" onclick="createSession()">
+                                                    <i class="fas fa-play"></i> Crear Sesión
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Sesiones Activas -->
+                                    <div class="col-md-8">
+                                        <div class="card">
+                                            <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                                                <h5><i class="fas fa-list"></i> Sesiones Activas</h5>
+                                                <button class="btn btn-light btn-sm" onclick="refreshSessions()">
+                                                    <i class="fas fa-sync-alt"></i> Actualizar
+                                                </button>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="sessionsContainer">
+                                                    <div class="text-center text-muted p-4">
+                                                        <i class="fas fa-mobile-alt fa-3x mb-3"></i>
+                                                        <p>Cargando sesiones...</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Webhooks -->
+                            <div class="tab-pane fade" id="webhooks-pane">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header bg-warning text-dark">
+                                                <h5><i class="fas fa-cog"></i> Configurar Webhook</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label for="webhookSessionId" class="form-label">Sesión</label>
+                                                    <select class="form-control" id="webhookSessionId">
+                                                        <option value="">Seleccionar sesión...</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="webhookUrl" class="form-label">URL del Webhook</label>
+                                                    <input type="url" class="form-control" id="webhookUrl" 
+                                                           placeholder="https://mi-servidor.com/webhook">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Eventos a Enviar</label>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="eventAll" value="all" checked>
+                                                        <label class="form-check-label" for="eventAll">Todos los eventos</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="eventReceived" value="message-received">
+                                                        <label class="form-check-label" for="eventReceived">Mensajes recibidos</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="eventDelivered" value="message-delivered">
+                                                        <label class="form-check-label" for="eventDelivered">Mensajes entregados</label>
+                                                    </div>
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="eventFromMe" value="message-from-me">
+                                                        <label class="form-check-label" for="eventFromMe">Mensajes enviados por mí</label>
+                                                    </div>
+                                                </div>
+                                                <div class="d-grid gap-2">
+                                                    <button class="btn btn-success" onclick="configureWebhook()">
+                                                        <i class="fas fa-save"></i> Configurar Webhook
+                                                    </button>
+                                                    <button class="btn btn-danger" onclick="removeWebhook()">
+                                                        <i class="fas fa-trash"></i> Eliminar Webhook
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="col-md-6">
+                                        <div class="card">
+                                            <div class="card-header bg-info text-white">
+                                                <h5><i class="fas fa-list"></i> Webhooks Configurados</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div id="webhooksContainer">
+                                                    <div class="text-center text-muted p-4">
+                                                        <i class="fas fa-webhook fa-3x mb-3"></i>
+                                                        <p>No hay webhooks configurados</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tab Enviar Mensajes -->
+                            <div class="tab-pane fade" id="messages-pane">
+                                <div class="row justify-content-center">
+                                    <div class="col-md-8">
+                                        <div class="card">
+                                            <div class="card-header bg-success text-white">
+                                                <h5><i class="fas fa-paper-plane"></i> Enviar Mensaje de Prueba</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="mb-3">
+                                                    <label for="sendSessionId" class="form-label">Sesión</label>
+                                                    <select class="form-control" id="sendSessionId">
+                                                        <option value="">Seleccionar sesión...</option>
+                                                    </select>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="phoneNumber" class="form-label">Número (con código de país)</label>
+                                                    <input type="text" class="form-control" id="phoneNumber" placeholder="5491123456789">
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="messageText" class="form-label">Mensaje</label>
+                                                    <textarea class="form-control" id="messageText" rows="4" 
+                                                              placeholder="Hola, este es un mensaje de prueba desde la API..."></textarea>
+                                                </div>
+                                                <button class="btn btn-success w-100" onclick="sendMessage()">
+                                                    <i class="fas fa-paper-plane"></i> Enviar Mensaje
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor de notificaciones -->
+    <div id="notifications" style="position: fixed; top: 20px; right: 20px; z-index: 1050;"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="admin-app.js"></script>
+</body>
+</html>
