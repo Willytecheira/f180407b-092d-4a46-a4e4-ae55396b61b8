@@ -17,17 +17,13 @@ fi
 
 # Verificar certificados SSL
 echo -e "${YELLOW}🔒 Verificando certificados SSL...${NC}"
-if [ ! -f "/etc/ssl/certs/docker.website.crt" ] || [ ! -f "/etc/ssl/private/docker.website.key" ]; then
+if [ ! -f "/etc/ssl/dockerwebsite/docker.website.crt" ] || [ ! -f "/etc/ssl/dockerwebsite/docker.website.key" ]; then
     echo -e "${RED}❌ Certificados SSL no encontrados en:${NC}"
-    echo "  - /etc/ssl/certs/docker.website.crt"
-    echo "  - /etc/ssl/private/docker.website.key"
-    echo ""
-    echo -e "${YELLOW}💡 Instala tus certificados SSL antes de continuar:${NC}"
-    echo "  sudo cp tu-certificado.crt /etc/ssl/certs/docker.website.crt"
-    echo "  sudo cp tu-clave-privada.key /etc/ssl/private/docker.website.key"
-    echo "  sudo chmod 644 /etc/ssl/certs/docker.website.crt"
-    echo "  sudo chmod 600 /etc/ssl/private/docker.website.key"
+    echo "  - /etc/ssl/dockerwebsite/docker.website.crt"
+    echo "  - /etc/ssl/dockerwebsite/docker.website.key"
     exit 1
+else
+    echo -e "${GREEN}✅ Certificados SSL encontrados${NC}"
 fi
 
 # Verificar Nginx
