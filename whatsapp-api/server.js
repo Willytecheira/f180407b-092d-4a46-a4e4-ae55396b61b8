@@ -45,6 +45,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Servir archivos estáticos
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Inicializar SessionManager
 const sessionManager = new SessionManager(io);
@@ -120,7 +121,8 @@ server.listen(PORT, () => {
   const directories = [
     process.env.SESSIONS_DIR || './sessions',
     process.env.CACHE_DIR || './.wwebjs_cache', 
-    process.env.AUTH_DIR || './.wwebjs_auth'
+    process.env.AUTH_DIR || './.wwebjs_auth',
+    './public/uploads'
   ];
   
   directories.forEach(dir => {
