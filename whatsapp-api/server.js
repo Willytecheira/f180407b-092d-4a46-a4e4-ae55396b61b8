@@ -68,14 +68,92 @@ const authenticateAPI = (req, res, next) => {
 app.use('/api', authenticateAPI, apiRoutes(sessionManager));
 app.use('/webhook', webhookRoutes(sessionManager));
 
+// Middleware de autenticación web
+const authenticateWeb = (req, res, next) => {
+  // Permitir acceso a archivos estáticos de login
+  if (req.path === '/login.html' || 
+      req.path.startsWith('/app.js') ||
+      req.path.startsWith('/admin-app.js') ||
+      req.path === '/info') {
+    return next();
+  }
+  
+  // Verificar autenticación por session token en header
+  const sessionToken = req.headers['x-session-token'] || req.query.sessionToken;
+  
+  if (!sessionToken) {
+    return res.redirect('/login.html');
+  }
+  
+  // Verificar que el token sea válido (formato simple)
+  try {
+    const sessionData = JSON.parse(Buffer.from(sessionToken, 'base64').toString());
+    if (sessionData.username && sessionData.loginTime) {
+      // Token válido por 24 horas
+      const loginTime = new Date(sessionData.loginTime);
+      const now = new Date();
+      const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
+      
+      if (hoursDiff < 24) {
+        req.user = sessionData;
+        return next();
+      }
+    }
+  } catch (error) {
+    // Token inválido
+  }
+  
+  return res.redirect('/login.html');
+};
+
+// Aplicar middleware de autenticación web a rutas protegidas
+app.use('/admin*', authenticateWeb);
+app.use('/index.html', authenticateWeb);
+
 // Ruta principal - Interface Web (redirigir a login)
 app.get('/', (req, res) => {
   res.redirect('/login.html');
 });
 
 // Ruta admin (protegida)
-app.get('/admin', (req, res) => {
+app.get('/admin', authenticateWeb, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+// Ruta de validación de sesión
+app.post('/validate-session', (req, res) => {
+  const { username, password } = req.body;
+  
+  // Usuarios hardcodeados (en producción usar base de datos)
+  const users = {
+    'admin': { password: 'admin123', role: 'admin' },
+    'usuario': { password: 'usuario123', role: 'user' }
+  };
+  
+  if (users[username] && users[username].password === password) {
+    // Crear token de sesión
+    const sessionData = {
+      username: username,
+      role: users[username].role,
+      loginTime: new Date().toISOString()
+    };
+    
+    const sessionToken = Buffer.from(JSON.stringify(sessionData)).toString('base64');
+    
+    res.json({
+      success: true,
+      sessionToken: sessionToken,
+      user: {
+        username: username,
+        role: users[username].role
+      }
+    });
+  } else {
+    res.status(401).json({
+      success: false,
+      error: 'Credenciales inválidas'
+    });
+  }
 });
 
 // Ruta para obtener información del servidor

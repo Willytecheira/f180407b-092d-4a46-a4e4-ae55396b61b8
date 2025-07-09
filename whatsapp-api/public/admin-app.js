@@ -16,9 +16,45 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
+    // Verificar token de sesión
+    const sessionData = localStorage.getItem('whatsapp_api_session');
+    if (!sessionData) {
+        localStorage.removeItem('whatsapp_api_logged_in');
+        window.location.href = '/login.html';
+        return;
+    }
+
+    try {
+        const userData = JSON.parse(sessionData);
+        
+        // Verificar que el token no haya expirado (24 horas)
+        const loginTime = new Date(userData.loginTime);
+        const now = new Date();
+        const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
+        
+        if (hoursDiff >= 24 || !userData.sessionToken) {
+            localStorage.removeItem('whatsapp_api_logged_in');
+            localStorage.removeItem('whatsapp_api_session');
+            window.location.href = '/login.html';
+            return;
+        }
+        
+        // Configurar headers para todas las peticiones
+        window.sessionToken = userData.sessionToken;
+        window.currentUser = userData;
+        
+    } catch (e) {
+        localStorage.removeItem('whatsapp_api_logged_in');
+        localStorage.removeItem('whatsapp_api_session');
+        window.location.href = '/login.html';
+        return;
+    }
+
     // Mostrar usuario actual
     const currentUser = localStorage.getItem('whatsapp_api_user') || 'admin';
-    document.getElementById('currentUser').textContent = currentUser;
+    if (document.getElementById('currentUser')) {
+        document.getElementById('currentUser').textContent = currentUser;
+    }
 
     // Inicializar la aplicación
     initializeApp();
@@ -37,6 +73,7 @@ function initializeApp() {
 function logout() {
     localStorage.removeItem('whatsapp_api_logged_in');
     localStorage.removeItem('whatsapp_api_user');
+    localStorage.removeItem('whatsapp_api_session');
     window.location.href = '/login.html';
 }
 

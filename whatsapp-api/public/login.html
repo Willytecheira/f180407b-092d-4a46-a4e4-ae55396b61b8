@@ -119,7 +119,20 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Verificar si ya está logueado
             if (localStorage.getItem('whatsapp_api_logged_in') === 'true') {
-                window.location.href = '/admin';
+                // Verificar que el token sea válido
+                const sessionData = localStorage.getItem('whatsapp_api_session');
+                if (sessionData) {
+                    try {
+                        const userData = JSON.parse(sessionData);
+                        if (userData.sessionToken) {
+                            window.location.href = '/admin';
+                            return;
+                        }
+                    } catch (e) {
+                        localStorage.removeItem('whatsapp_api_logged_in');
+                        localStorage.removeItem('whatsapp_api_session');
+                    }
+                }
             }
 
             // Configurar eventos
@@ -176,13 +189,26 @@
             loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verificando...';
             loginBtn.disabled = true;
 
-            // Simular delay de autenticación
-            setTimeout(() => {
-                // Verificar credenciales
-                if (USERS[username] && USERS[username] === password) {
-                    // Login exitoso
+            // Hacer petición al servidor para validar credenciales
+            fetch('/validate-session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ username, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Login exitoso - guardar token de sesión
                     localStorage.setItem('whatsapp_api_logged_in', 'true');
-                    localStorage.setItem('whatsapp_api_user', username);
+                    localStorage.setItem('whatsapp_api_user', data.user.username);
+                    localStorage.setItem('whatsapp_api_session', JSON.stringify({
+                        username: data.user.username,
+                        role: data.user.role,
+                        loginTime: new Date().toISOString(),
+                        sessionToken: data.sessionToken
+                    }));
                     
                     // Mostrar éxito
                     loginBtn.innerHTML = '<i class="fas fa-check"></i> ¡Acceso concedido!';
@@ -194,10 +220,14 @@
                     }, 1000);
                 } else {
                     // Login fallido
-                    showError('Usuario o contraseña incorrectos');
+                    showError(data.error || 'Usuario o contraseña incorrectos');
                     resetLoginButton();
                 }
-            }, 1500);
+            })
+            .catch(error => {
+                showError('Error de conexión con el servidor');
+                resetLoginButton();
+            });
         }
 
         function showError(message) {
