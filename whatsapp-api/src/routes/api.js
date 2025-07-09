@@ -357,4 +357,6 @@ module.exports = (sessionManager) => {
       });
     }
   });
+
+  return router;
 };
