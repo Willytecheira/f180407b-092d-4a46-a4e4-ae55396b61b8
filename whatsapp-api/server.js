@@ -43,38 +43,12 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Servir archivos estáticos
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
-
-// Inicializar SessionManager
-const sessionManager = new SessionManager(io);
-
-// Middleware para autenticación API (opcional)
-const authenticateAPI = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  
-  if (!apiKey || apiKey !== API_KEY) {
-    return res.status(401).json({ 
-      success: false, 
-      error: 'API Key requerida. Usa el header X-API-Key o query param apiKey' 
-    });
-  }
-  
-  next();
-};
-
-// Rutas API
-app.use('/api', authenticateAPI, apiRoutes(sessionManager));
-app.use('/webhook', webhookRoutes(sessionManager));
-
 // Middleware de autenticación web
 const authenticateWeb = (req, res, next) => {
-  // Permitir acceso a archivos estáticos de login
+  // Permitir acceso a archivos específicos de login
   if (req.path === '/login.html' || 
-      req.path.startsWith('/app.js') ||
-      req.path.startsWith('/admin-app.js') ||
-      req.path === '/info') {
+      req.path === '/info' ||
+      req.path === '/validate-session') {
     return next();
   }
   
@@ -106,17 +80,65 @@ const authenticateWeb = (req, res, next) => {
   return res.redirect('/login.html');
 };
 
-// Aplicar middleware de autenticación web a rutas protegidas
-app.use('/admin*', authenticateWeb);
-app.use('/index.html', authenticateWeb);
+// Servir archivos estáticos con protección
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, path, stat) => {
+    // Solo permitir login.html sin autenticación
+    if (path.endsWith('login.html')) {
+      return;
+    }
+    
+    // Para otros archivos, verificar autenticación
+    const req = res.req;
+    if (!req.headers['x-session-token'] && !req.query.sessionToken) {
+      res.redirect('/login.html');
+      return;
+    }
+  }
+}));
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
+// Inicializar SessionManager
+const sessionManager = new SessionManager(io);
+
+// Middleware para autenticación API (opcional)
+const authenticateAPI = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  
+  if (!apiKey || apiKey !== API_KEY) {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'API Key requerida. Usa el header X-API-Key o query param apiKey' 
+    });
+  }
+  
+  next();
+};
+
+// Rutas API
+app.use('/api', authenticateAPI, apiRoutes(sessionManager));
+app.use('/webhook', webhookRoutes(sessionManager));
+
+// Aplicar middleware de autenticación a todas las rutas except login
+app.use((req, res, next) => {
+  // Permitir acceso sin autenticación solo a estas rutas
+  const publicRoutes = ['/login.html', '/info', '/validate-session'];
+  
+  if (publicRoutes.includes(req.path)) {
+    return next();
+  }
+  
+  // Para todas las demás rutas, requerir autenticación
+  authenticateWeb(req, res, next);
+});
 
 // Ruta principal - Interface Web (redirigir a login)
 app.get('/', (req, res) => {
   res.redirect('/login.html');
 });
 
-// Ruta admin (protegida)
-app.get('/admin', authenticateWeb, (req, res) => {
+// Ruta admin (ya protegida por middleware global)
+app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
