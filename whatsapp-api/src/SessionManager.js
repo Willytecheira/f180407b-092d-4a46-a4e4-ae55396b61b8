@@ -10,6 +10,13 @@ class SessionManager {
     this.messages = new Map();
     this.io = io;
     this.webhookUrl = process.env.WEBHOOK_URL || null;
+    
+    // 📁 Crear carpeta de uploads si no existe
+    this.uploadsDir = path.join(__dirname, '../public/uploads');
+    if (!fs.existsSync(this.uploadsDir)) {
+      fs.mkdirSync(this.uploadsDir, { recursive: true });
+      console.log('📁 Carpeta de uploads creada:', this.uploadsDir);
+    }
   }
 
   async createSession(sessionId) {
@@ -75,9 +82,9 @@ class SessionManager {
       try {
         const qrCodeData = await qrcode.toDataURL(qr);
         this.qrCodes.set(sessionId, qrCodeData);
-        
+
         this.updateSessionStatus(sessionId, 'qr_ready');
-        
+
         this.io.to(`session-${sessionId}`).emit('qr', {
           sessionId,
           qr: qrCodeData
@@ -93,7 +100,7 @@ class SessionManager {
     client.on('ready', () => {
       this.updateSessionStatus(sessionId, 'connected');
       this.qrCodes.delete(sessionId);
-      
+
       this.io.to(`session-${sessionId}`).emit('connected', {
         sessionId,
         message: 'WhatsApp conectado exitosamente'
@@ -112,7 +119,7 @@ class SessionManager {
     client.on('auth_failure', (msg) => {
       console.error(`❌ Error de autenticación en ${sessionId}:`, msg);
       this.updateSessionStatus(sessionId, 'auth_failure');
-      
+
       this.io.to(`session-${sessionId}`).emit('auth_failure', {
         sessionId,
         error: msg
@@ -123,7 +130,7 @@ class SessionManager {
     client.on('disconnected', (reason) => {
       console.log(`🔌 Sesión ${sessionId} desconectada:`, reason);
       this.updateSessionStatus(sessionId, 'disconnected');
-      
+
       this.io.to(`session-${sessionId}`).emit('disconnected', {
         sessionId,
         reason
@@ -162,17 +169,42 @@ class SessionManager {
       sessionId
     };
 
-    // Procesar media si existe
+    // 🎯 PROCESAR MULTIMEDIA Y GUARDAR EN SERVIDOR
     if (message.hasMedia) {
       try {
         const media = await message.downloadMedia();
+        
+        // Generar nombre único para el archivo
+        const timestamp = Date.now();
+        const extension = media.mimetype?.split('/')[1] || 'bin';
+        const originalName = media.filename || `media.${extension}`;
+        const fileName = `${timestamp}_${originalName}`;
+        const filePath = path.join(this.uploadsDir, fileName);
+        
+        // 💾 GUARDAR ARCHIVO EN SERVIDOR
+        const buffer = Buffer.from(media.data, 'base64');
+        await fs.writeFile(filePath, buffer);
+        
+        // 🌐 GENERAR URL ACCESIBLE
+        const serverIP = process.env.SERVER_IP || 'localhost';
+        const serverPort = process.env.PORT || 3000;
+        const fileUrl = `http://${serverIP}:${serverPort}/uploads/${fileName}`;
+        
+        console.log(`📁 Archivo multimedia guardado: ${fileName} (${(buffer.length / 1024).toFixed(2)} KB)`);
+        console.log(`🌐 URL: ${fileUrl}`);
+        
+        // ✅ INCLUIR METADATOS EN LUGAR DE BASE64
         messageData.media = {
-          mimetype: media.mimetype,
-          data: media.data,
-          filename: media.filename || `media_${Date.now()}`
+          fileUrl: fileUrl,           // 🎯 URL del archivo accesible
+          fileName: fileName,         // Nombre único del archivo
+          originalName: originalName, // Nombre original del archivo
+          mimetype: media.mimetype,   // Tipo de archivo (image/jpeg, video/mp4, etc.)
+          fileSize: buffer.length,    // Tamaño en bytes
+          filePath: filePath         // Ruta local del archivo (para uso interno)
         };
+        
       } catch (error) {
-        console.error(`Error descargando media en ${sessionId}:`, error);
+        console.error(`Error procesando multimedia en ${sessionId}:`, error);
         messageData.media = null;
       }
     }
@@ -193,12 +225,12 @@ class SessionManager {
     // Guardar mensaje
     const sessionMessages = this.messages.get(sessionId) || [];
     sessionMessages.push(messageData);
-    
+
     // Mantener solo los últimos 1000 mensajes
     if (sessionMessages.length > 1000) {
       sessionMessages.splice(0, sessionMessages.length - 1000);
     }
-    
+
     this.messages.set(sessionId, sessionMessages);
 
     // Emitir a clientes conectados
@@ -225,8 +257,9 @@ class SessionManager {
         },
         body: JSON.stringify(messageData)
       });
+      console.log('📤 Webhook enviado exitosamente');
     } catch (error) {
-      console.error('Error enviando a webhook:', error);
+      console.error('❌ Error enviando a webhook:', error);
     }
   }
 
@@ -242,7 +275,7 @@ class SessionManager {
 
   async sendMessage(sessionId, number, message, options = {}) {
     const session = this.sessions.get(sessionId);
-    
+
     if (!session) {
       throw new Error(`Sesión ${sessionId} no encontrada`);
     }
@@ -254,9 +287,9 @@ class SessionManager {
     try {
       const chatId = number.includes('@') ? number : `${number}@c.us`;
       const sentMessage = await session.client.sendMessage(chatId, message, options);
-      
+
       console.log(`📤 Mensaje enviado desde ${sessionId} a ${number}`);
-      
+
       return {
         success: true,
         messageId: sentMessage.id._serialized,
@@ -270,7 +303,7 @@ class SessionManager {
 
   async sendMedia(sessionId, number, media, options = {}) {
     const session = this.sessions.get(sessionId);
-    
+
     if (!session) {
       throw new Error(`Sesión ${sessionId} no encontrada`);
     }
@@ -302,9 +335,9 @@ class SessionManager {
       const sentMessage = await session.client.sendMessage(chatId, mediaMessage, {
         caption: options.caption
       });
-      
+
       console.log(`📤 Media enviado desde ${sessionId} a ${number}`);
-      
+
       return {
         success: true,
         messageId: sentMessage.id._serialized,
@@ -365,7 +398,7 @@ class SessionManager {
 
   async logoutSession(sessionId) {
     const session = this.sessions.get(sessionId);
-    
+
     if (!session) {
       throw new Error(`Sesión ${sessionId} no encontrada`);
     }
@@ -373,16 +406,16 @@ class SessionManager {
     try {
       await session.client.logout();
       await session.client.destroy();
-      
+
       this.sessions.delete(sessionId);
       this.qrCodes.delete(sessionId);
-      
+
       // Limpiar directorio de sesión
       const sessionPath = path.join('./.wwebjs_auth/session-' + sessionId);
       await fs.remove(sessionPath).catch(() => {});
-      
+
       console.log(`🚪 Sesión ${sessionId} cerrada exitosamente`);
-      
+
       return { success: true, message: 'Sesión cerrada exitosamente' };
     } catch (error) {
       console.error(`Error cerrando sesión ${sessionId}:`, error);
@@ -392,12 +425,12 @@ class SessionManager {
 
   async closeAllSessions() {
     console.log('🔄 Cerrando todas las sesiones...');
-    
+
     const promises = [];
     for (const sessionId of this.sessions.keys()) {
       promises.push(this.logoutSession(sessionId).catch(console.error));
     }
-    
+
     await Promise.all(promises);
     console.log('✅ Todas las sesiones cerradas');
   }
