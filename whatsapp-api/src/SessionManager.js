@@ -198,10 +198,9 @@ class SessionManager {
           const buffer = Buffer.from(media.data, 'base64');
           await fs.writeFile(filePath, buffer);
           
-          // Generar URL accesible
+          // Generar URL accesible sin puerto
           const serverIP = process.env.SERVER_IP || 'localhost';
-          const serverPort = process.env.PORT || 3000;
-          const fileUrl = `http://${serverIP}:${serverPort}/uploads/${fileName}`;
+          const fileUrl = `http://${serverIP}/uploads/${fileName}`;
           
           messageData.media = {
             fileUrl,
