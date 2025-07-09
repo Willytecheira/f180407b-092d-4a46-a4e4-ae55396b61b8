@@ -55,6 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (document.getElementById('currentUser')) {
         document.getElementById('currentUser').textContent = currentUser;
     }
+    if (document.getElementById('userInfo')) {
+        document.getElementById('userInfo').textContent = `${window.currentUser.username} (${window.currentUser.role})`;
+    }
 
     // Inicializar la aplicación
     initializeApp();

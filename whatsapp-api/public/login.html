@@ -214,10 +214,10 @@
                     loginBtn.innerHTML = '<i class="fas fa-check"></i> ¡Acceso concedido!';
                     loginBtn.className = 'btn btn-success';
                     
-                    // Redireccionar
+                    // Redireccionar inmediatamente
                     setTimeout(() => {
-                        window.location.href = '/admin';
-                    }, 1000);
+                        window.location.replace('/admin');
+                    }, 800);
                 } else {
                     // Login fallido
                     showError(data.error || 'Usuario o contraseña incorrectos');

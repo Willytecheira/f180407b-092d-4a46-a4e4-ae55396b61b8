@@ -132,9 +132,14 @@ app.use((req, res, next) => {
   authenticateWeb(req, res, next);
 });
 
-// Ruta principal - Interface Web (redirigir a login)
+// Ruta principal - Interface Web (redirigir a index)
 app.get('/', (req, res) => {
-  res.redirect('/login.html');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Ruta index (página principal protegida)
+app.get('/index.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Ruta admin (ya protegida por middleware global)
