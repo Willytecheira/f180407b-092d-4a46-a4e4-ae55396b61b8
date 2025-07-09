@@ -12,12 +12,12 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000,
         API_KEY: 'whatsapp-api-key-2024',
-        SERVER_IP: 'docker.website',
+        SERVER_IP: 'https://docker.website',
         SESSIONS_DIR: './sessions',
         CACHE_DIR: './.wwebjs_cache',
         AUTH_DIR: './.wwebjs_auth',
-        DISABLE_HTTPS: 'true',
-        FORCE_HTTP: 'true'
+        DISABLE_HTTPS: 'false',
+        FORCE_HTTP: 'false'
       },
       log_file: './logs/combined.log',
       out_file: './logs/out.log',
