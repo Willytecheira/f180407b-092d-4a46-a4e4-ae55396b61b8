@@ -11,18 +11,48 @@ class SessionManager {
     this.webhooks = new Map(); // Nuevo: webhooks por sesión
     this.io = io;
     this.webhookUrl = process.env.WEBHOOK_URL || null;
+    this.dataPath = path.join(process.cwd(), 'data');
+    this.webhooksFile = path.join(this.dataPath, 'webhooks.json');
     
-    // Crear directorio de uploads si no existe
-    this.ensureUploadsDirectory();
+    // Crear directorios necesarios y cargar datos
+    this.initializeStorage();
   }
   
-  async ensureUploadsDirectory() {
+  async initializeStorage() {
     try {
+      // Crear directorios necesarios
+      await fs.ensureDir(this.dataPath);
       const uploadsPath = path.join(process.cwd(), 'public', 'uploads');
       await fs.ensureDir(uploadsPath);
-      console.log('📁 Directorio uploads verificado:', uploadsPath);
+      
+      // Cargar webhooks guardados
+      await this.loadWebhooks();
+      
+      console.log('📁 Almacenamiento inicializado correctamente');
     } catch (error) {
-      console.error('Error creando directorio uploads:', error);
+      console.error('Error inicializando almacenamiento:', error);
+    }
+  }
+
+  async loadWebhooks() {
+    try {
+      if (await fs.pathExists(this.webhooksFile)) {
+        const webhookData = await fs.readJson(this.webhooksFile);
+        this.webhooks = new Map(Object.entries(webhookData));
+        console.log(`🔗 ${this.webhooks.size} webhooks cargados desde archivo`);
+      }
+    } catch (error) {
+      console.error('Error cargando webhooks:', error);
+    }
+  }
+
+  async saveWebhooks() {
+    try {
+      const webhookData = Object.fromEntries(this.webhooks.entries());
+      await fs.writeJson(this.webhooksFile, webhookData, { spaces: 2 });
+      console.log('💾 Webhooks guardados en archivo');
+    } catch (error) {
+      console.error('Error guardando webhooks:', error);
     }
   }
 
@@ -503,6 +533,9 @@ class SessionManager {
         console.log(`🗑️ Webhook eliminado para sesión ${sessionId}`);
       }
       
+      // Guardar cambios en archivo
+      await this.saveWebhooks();
+      
       return { success: true };
     } catch (error) {
       console.error(`Error configurando webhook para ${sessionId}:`, error);
@@ -520,6 +553,36 @@ class SessionManager {
       configuredAt: webhook?.configuredAt || null,
       globalWebhook: this.webhookUrl
     };
+  }
+
+  getAllWebhooks() {
+    const webhooks = [];
+    
+    // Webhook global
+    if (this.webhookUrl) {
+      webhooks.push({
+        type: 'global',
+        sessionId: null,
+        url: this.webhookUrl,
+        events: ['all'],
+        configured: true,
+        configuredAt: 'Server startup'
+      });
+    }
+    
+    // Webhooks por sesión
+    for (const [sessionId, webhook] of this.webhooks.entries()) {
+      webhooks.push({
+        type: 'session',
+        sessionId,
+        url: webhook.url,
+        events: webhook.events,
+        configured: true,
+        configuredAt: webhook.configuredAt
+      });
+    }
+    
+    return webhooks;
   }
 
   getFileExtension(mimetype) {

@@ -358,5 +358,23 @@ module.exports = (sessionManager) => {
     }
   });
 
+  // GET /api/webhooks - Listar todos los webhooks configurados
+  router.get('/webhooks', (req, res) => {
+    try {
+      const webhooks = sessionManager.getAllWebhooks();
+      
+      res.json({
+        success: true,
+        webhooks,
+        total: webhooks.length
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: error.message
+      });
+    }
+  });
+
   return router;
 };
