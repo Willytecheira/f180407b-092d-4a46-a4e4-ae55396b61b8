@@ -184,12 +184,20 @@ class SessionManager {
     });
 
     // Cambio de estado de mensaje
-    client.on('message_ack', (message, ack) => {
-      this.io.to(`session-${sessionId}`).emit('message_ack', {
+    client.on('message_ack', async (message, ack) => {
+      const ackData = {
         sessionId,
         messageId: message.id._serialized,
-        ack
-      });
+        ack,
+        ackStatus: this.getAckStatusText(ack),
+        timestamp: new Date().toISOString()
+      };
+
+      // Emitir via WebSocket
+      this.io.to(`session-${sessionId}`).emit('message_ack', ackData);
+
+      // Enviar a webhook si está configurado
+      await this.sendToWebhook(sessionId, ackData, 'message_ack');
     });
   }
 
@@ -583,6 +591,16 @@ class SessionManager {
     }
     
     return webhooks;
+  }
+
+  getAckStatusText(ack) {
+    const statusMap = {
+      0: 'sent',        // Mensaje enviado
+      1: 'delivered',   // Mensaje entregado al servidor
+      2: 'received',    // Mensaje recibido en el dispositivo
+      3: 'read'         // Mensaje leído
+    };
+    return statusMap[ack] || 'unknown';
   }
 
   getFileExtension(mimetype) {
