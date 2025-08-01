@@ -9,8 +9,13 @@ const path = require('path');
 const fs = require('fs-extra');
 
 const SessionManager = require('./src/SessionManager');
+const UserManager = require('./src/managers/UserManager');
+const MetricsManager = require('./src/managers/MetricsManager');
 const apiRoutes = require('./src/routes/api');
 const webhookRoutes = require('./src/routes/webhook');
+const userRoutes = require('./src/routes/users');
+const metricsRoutes = require('./src/routes/metrics');
+const systemRoutes = require('./src/routes/system');
 
 const app = express();
 const server = http.createServer(app);
@@ -47,10 +52,12 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
-// Inicializar SessionManager
+// Inicializar managers
 const sessionManager = new SessionManager(io);
+const userManager = new UserManager();
+const metricsManager = new MetricsManager(sessionManager);
 
-// Middleware para autenticación API (opcional)
+// Middleware para autenticación API
 const authenticateAPI = (req, res, next) => {
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
   
@@ -64,8 +71,56 @@ const authenticateAPI = (req, res, next) => {
   next();
 };
 
+// Middleware para autenticación de usuarios
+const authenticateUser = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '') || req.headers['x-session-token'];
+    
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Token de sesión requerido'
+      });
+    }
+
+    // Decodificar token (simple base64 en este caso)
+    const sessionData = JSON.parse(Buffer.from(token, 'base64').toString());
+    const user = userManager.getUser(sessionData.username);
+    
+    if (!user || !user.active) {
+      return res.status(401).json({
+        success: false,
+        error: 'Usuario no válido o inactivo'
+      });
+    }
+
+    // Verificar expiración (24 horas)
+    const loginTime = new Date(sessionData.loginTime);
+    const now = new Date();
+    const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
+    
+    if (hoursDiff > 24) {
+      return res.status(401).json({
+        success: false,
+        error: 'Sesión expirada'
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      error: 'Token inválido'
+    });
+  }
+};
+
 // Rutas API
 app.use('/api', authenticateAPI, apiRoutes(sessionManager));
+app.use('/api/users', authenticateAPI, authenticateUser, userRoutes(userManager));
+app.use('/api/metrics', authenticateAPI, metricsRoutes(metricsManager, sessionManager));
+app.use('/api/system', authenticateAPI, authenticateUser, systemRoutes(sessionManager, userManager));
 app.use('/webhook', webhookRoutes(sessionManager));
 
 // Rutas específicas (sin middleware global complicado)
@@ -77,38 +132,54 @@ app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-// Ruta de validación de sesión
-app.post('/validate-session', (req, res) => {
-  const { username, password } = req.body;
-  
-  // Usuarios hardcodeados (en producción usar base de datos)
-  const users = {
-    'admin': { password: 'admin123', role: 'admin' },
-    'usuario': { password: 'usuario123', role: 'user' }
-  };
-  
-  if (users[username] && users[username].password === password) {
-    // Crear token de sesión
-    const sessionData = {
-      username: username,
-      role: users[username].role,
-      loginTime: new Date().toISOString()
-    };
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Ruta de validación de sesión (actualizada para usar UserManager)
+app.post('/validate-session', async (req, res) => {
+  try {
+    const { username, password } = req.body;
     
-    const sessionToken = Buffer.from(JSON.stringify(sessionData)).toString('base64');
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username y password son requeridos'
+      });
+    }
+
+    const user = await userManager.validateCredentials(username, password);
     
-    res.json({
-      success: true,
-      sessionToken: sessionToken,
-      user: {
-        username: username,
-        role: users[username].role
-      }
-    });
-  } else {
-    res.status(401).json({
+    if (user) {
+      // Crear token de sesión
+      const sessionData = {
+        username: user.username,
+        role: user.role,
+        loginTime: new Date().toISOString()
+      };
+      
+      const sessionToken = Buffer.from(JSON.stringify(sessionData)).toString('base64');
+      
+      res.json({
+        success: true,
+        sessionToken: sessionToken,
+        user: {
+          username: user.username,
+          role: user.role,
+          email: user.email
+        }
+      });
+    } else {
+      res.status(401).json({
+        success: false,
+        error: 'Credenciales inválidas'
+      });
+    }
+  } catch (error) {
+    console.error('Error en validación de sesión:', error);
+    res.status(500).json({
       success: false,
-      error: 'Credenciales inválidas'
+      error: 'Error interno del servidor'
     });
   }
 });
@@ -184,11 +255,13 @@ server.listen(PORT, () => {
 process.on('SIGINT', async () => {
   console.log('\n🛑 Cerrando servidor...');
   await sessionManager.closeAllSessions();
+  await metricsManager.saveMetrics();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
   console.log('\n🛑 Cerrando servidor...');
   await sessionManager.closeAllSessions();
+  await metricsManager.saveMetrics();
   process.exit(0);
 });
