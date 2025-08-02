@@ -186,6 +186,17 @@ class MetricsManager {
           platform: os.platform(),
           arch: os.arch()
         },
+        os: {
+          platform: os.platform(),
+          arch: os.arch(),
+          hostname: os.hostname(),
+          release: os.release()
+        },
+        process: {
+          pid: process.pid,
+          nodeVersion: process.version,
+          uptime: process.uptime()
+        },
         uptime: {
           system: os.uptime(),
           process: process.uptime(),
