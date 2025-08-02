@@ -538,13 +538,15 @@ function loadUsersManagement() {
     if (sessionData) {
         try {
             const data = JSON.parse(sessionData);
-            authToken = Buffer.from(JSON.stringify({
+            // Use btoa instead of Buffer for browser compatibility
+            authToken = btoa(JSON.stringify({
                 username: data.username,
                 role: data.role || 'admin',
                 loginTime: data.loginTime
-            })).toString('base64');
+            }));
+            console.log('Users auth token created:', authToken.substring(0, 20) + '...');
         } catch (error) {
-            console.error('Error parsing session data:', error);
+            console.error('Error parsing session data for users:', error);
         }
     }
     
@@ -661,13 +663,15 @@ function loadSystemInfo() {
     if (sessionData) {
         try {
             const data = JSON.parse(sessionData);
-            authToken = Buffer.from(JSON.stringify({
+            // Use btoa instead of Buffer for browser compatibility
+            authToken = btoa(JSON.stringify({
                 username: data.username,
                 role: data.role || 'admin',
                 loginTime: data.loginTime
-            })).toString('base64');
+            }));
+            console.log('System auth token created:', authToken.substring(0, 20) + '...');
         } catch (error) {
-            console.error('Error parsing session data:', error);
+            console.error('Error parsing session data for system:', error);
         }
     }
     
@@ -767,10 +771,10 @@ function displaySystemInfo(systemInfo) {
                         <span class="metric-label">Memoria Libre</span>
                         <span class="metric-value">${formatBytes(systemInfo.memory?.free)}</span>
                     </div>
-                    <div class="metric-item">
-                        <span class="metric-label">Memoria Usada</span>
-                        <span class="metric-value">${formatBytes(systemInfo.memory?.used)} (${systemInfo.memory?.usage?.toFixed(1) || '0'}%)</span>
-                    </div>
+                     <div class="metric-item">
+                         <span class="metric-label">Memoria Usada</span>
+                         <span class="metric-value">${formatBytes(systemInfo.memory?.used)} (${((systemInfo.memory?.used / systemInfo.memory?.total) * 100)?.toFixed(1) || '0'}%)</span>
+                     </div>
                     <div class="metric-item">
                         <span class="metric-label">CPU Cores</span>
                         <span class="metric-value">${systemInfo.cpu?.cores || 'N/A'}</span>
@@ -812,10 +816,10 @@ function displaySystemInfo(systemInfo) {
                                 <span class="metric-label">Memoria Externa</span>
                                 <span class="metric-value">${formatBytes(systemInfo.memory?.process?.external)}</span>
                             </div>
-                            <div class="metric-item">
-                                <span class="metric-label">Uso de Heap</span>
-                                <span class="metric-value">${systemInfo.memory?.process?.heapUsage?.toFixed(1) || '0'}%</span>
-                            </div>
+                             <div class="metric-item">
+                                 <span class="metric-label">Uso de Heap</span>
+                                 <span class="metric-value">${((systemInfo.memory?.process?.heapUsed / systemInfo.memory?.process?.heapTotal) * 100)?.toFixed(1) || '0'}%</span>
+                             </div>
                         </div>
                     </div>
                 </div>
