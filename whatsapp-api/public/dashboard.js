@@ -1202,9 +1202,21 @@ function createWebhook() {
                                     <div class="mb-3">
                                         <label class="form-label">Eventos (opcional)</label>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" value="message" id="eventMessage" checked>
+                                            <input class="form-check-input" type="checkbox" value="message-received" id="eventMessage" checked>
                                             <label class="form-check-label" for="eventMessage">
-                                                Mensajes nuevos
+                                                Mensajes recibidos
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="message-delivered" id="eventDelivered">
+                                            <label class="form-check-label" for="eventDelivered">
+                                                Mensajes entregados
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="message-from-me" id="eventFromMe">
+                                            <label class="form-check-label" for="eventFromMe">
+                                                Mensajes enviados por mí
                                             </label>
                                         </div>
                                         <div class="form-check">
@@ -1259,12 +1271,21 @@ function submitCreateWebhook() {
     
     // Get selected events
     const events = [];
-    if (document.getElementById('eventMessage')?.checked) events.push('message');
+    if (document.getElementById('eventMessage')?.checked) events.push('message-received');
+    if (document.getElementById('eventDelivered')?.checked) events.push('message-delivered');
+    if (document.getElementById('eventFromMe')?.checked) events.push('message-from-me');
     if (document.getElementById('eventQr')?.checked) events.push('qr');
     
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
     
     showLoading('Creando webhook...', true);
+    
+    // Log para debug
+    console.log('Creating webhook:', {
+        sessionId,
+        webhookUrl,
+        events: events.length > 0 ? events : ['all']
+    });
     
     fetch(`/api/${sessionId}/webhook`, {
         method: 'POST',
