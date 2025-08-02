@@ -114,6 +114,19 @@
             padding: 1.5rem;
             margin-bottom: 1.5rem;
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            height: 400px; /* Fixed height to prevent infinite expansion */
+        }
+        
+        .chart-container canvas {
+            max-height: 300px !important; /* Ensure canvas doesn't overflow */
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
         }
 
         .session-card {
@@ -318,7 +331,7 @@
     <div class="container-fluid">
         <div class="main-container">
             <!-- Dashboard Content -->
-            <div id="dashboard-content" class="p-4">
+            <div id="dashboard-content" class="tab-content active p-4">
                 <!-- Overview Statistics -->
                 <div class="row mb-4">
                     <div class="col-md-3">
@@ -422,6 +435,107 @@
                                 </button>
                             </div>
                             <div id="sessionsContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Sessions Content -->
+            <div id="sessions-content" class="tab-content p-4">
+                <h2 class="mb-4"><i class="fas fa-mobile-alt me-2"></i>Gestión de Sesiones</h2>
+                <div id="sessionsManagement">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando sesiones...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Users Content -->
+            <div id="users-content" class="tab-content p-4">
+                <h2 class="mb-4"><i class="fas fa-users me-2"></i>Gestión de Usuarios</h2>
+                <div class="row">
+                    <div class="col-lg-8">
+                        <div class="chart-container">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5>Lista de Usuarios</h5>
+                                <button class="btn btn-primary-custom btn-custom" onclick="createUser()">
+                                    <i class="fas fa-plus me-1"></i>Nuevo Usuario
+                                </button>
+                            </div>
+                            <div id="usersTable">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Cargando usuarios...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="chart-container">
+                            <h5 class="mb-3">Estadísticas de Usuarios</h5>
+                            <div id="userStats">
+                                <div class="metric-item">
+                                    <span class="metric-label">Total Usuarios</span>
+                                    <span class="metric-value" id="totalUsers">0</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Administradores</span>
+                                    <span class="metric-value" id="adminUsers">0</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Operadores</span>
+                                    <span class="metric-value" id="operatorUsers">0</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Viewers</span>
+                                    <span class="metric-value" id="viewerUsers">0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- System Content -->
+            <div id="system-content" class="tab-content p-4">
+                <h2 class="mb-4"><i class="fas fa-cog me-2"></i>Configuración del Sistema</h2>
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="chart-container">
+                            <h5 class="mb-3">Información del Sistema</h5>
+                            <div id="systemInfo">
+                                <div class="metric-item">
+                                    <span class="metric-label">Versión Node.js</span>
+                                    <span class="metric-value" id="nodeVersion">-</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Plataforma</span>
+                                    <span class="metric-value" id="platform">-</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Arquitectura</span>
+                                    <span class="metric-value" id="architecture">-</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Memoria Total</span>
+                                    <span class="metric-value" id="totalMemory">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="chart-container">
+                            <h5 class="mb-3">Estado del Servicio</h5>
+                            <div id="serviceStatus">
+                                <div class="text-center">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Verificando estado...</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

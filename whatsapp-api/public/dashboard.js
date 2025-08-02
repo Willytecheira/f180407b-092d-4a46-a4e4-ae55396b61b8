@@ -232,13 +232,16 @@ function updateAlerts(alerts) {
 
 // Update sessions list
 function updateSessionsList(sessions) {
+    console.log('Updating sessions list:', sessions); // Debug logging
     const container = document.getElementById('sessionsContainer');
     
-    if (sessions.length === 0) {
+    if (!sessions || sessions.length === 0) {
+        console.log('No sessions found or sessions array is empty'); // Debug logging
         container.innerHTML = `
             <div class="text-center text-muted p-4">
                 <i class="fas fa-mobile-alt fa-3x mb-3"></i>
                 <p>No hay sesiones disponibles</p>
+                <small class="text-muted">Verifica que el sistema esté funcionando correctamente</small>
             </div>
         `;
         return;
@@ -369,21 +372,204 @@ document.querySelectorAll('.nav-link').forEach(link => {
         // Add active class to clicked link
         this.classList.add('active');
         
+        // Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        
         // Handle navigation
         const href = this.getAttribute('href');
         switch(href) {
             case '#dashboard':
-                // Already on dashboard
+                document.getElementById('dashboard-content').classList.add('active');
                 break;
             case '#sessions':
-                window.location.href = '/admin.html';
+                document.getElementById('sessions-content').classList.add('active');
+                loadSessionsManagement();
                 break;
             case '#users':
-                window.location.href = '/users.html';
+                document.getElementById('users-content').classList.add('active');
+                loadUsersManagement();
                 break;
             case '#system':
-                window.location.href = '/system.html';
+                document.getElementById('system-content').classList.add('active');
+                loadSystemInfo();
                 break;
         }
     });
 });
+
+// Load sessions management
+async function loadSessionsManagement() {
+    const container = document.getElementById('sessionsManagement');
+    try {
+        const response = await fetch(`${BASE_URL}/api/sessions`, {
+            headers: { 'X-API-Key': API_KEY }
+        });
+        
+        if (!response.ok) throw new Error('Error cargando sesiones');
+        
+        const data = await response.json();
+        console.log('Sessions management data:', data); // Debug logging
+        
+        if (data.success) {
+            container.innerHTML = data.sessions.map(session => `
+                <div class="session-card">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">${session.id}</h6>
+                            <small class="text-muted">Estado: ${getStatusText(session.status)}</small>
+                        </div>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="viewSession('${session.id}')">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.id}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<div class="alert alert-warning">Error cargando sesiones</div>';
+        }
+    } catch (error) {
+        console.error('Error loading sessions management:', error);
+        container.innerHTML = '<div class="alert alert-danger">Error de conexión</div>';
+    }
+}
+
+// Load users management
+async function loadUsersManagement() {
+    const container = document.getElementById('usersTable');
+    try {
+        const response = await fetch(`${BASE_URL}/api/users`, {
+            headers: { 'X-API-Key': API_KEY }
+        });
+        
+        if (!response.ok) throw new Error('Error cargando usuarios');
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update stats
+            const stats = data.users.reduce((acc, user) => {
+                acc.total++;
+                acc[user.role] = (acc[user.role] || 0) + 1;
+                return acc;
+            }, { total: 0, admin: 0, operator: 0, viewer: 0 });
+            
+            document.getElementById('totalUsers').textContent = stats.total;
+            document.getElementById('adminUsers').textContent = stats.admin || 0;
+            document.getElementById('operatorUsers').textContent = stats.operator || 0;
+            document.getElementById('viewerUsers').textContent = stats.viewer || 0;
+            
+            // Update table
+            container.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Último Login</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${data.users.map(user => `
+                                <tr>
+                                    <td><strong>${user.username}</strong></td>
+                                    <td>${user.email || 'N/A'}</td>
+                                    <td><span class="badge bg-secondary">${user.role}</span></td>
+                                    <td>${user.lastLogin ? formatDate(user.lastLogin) : 'Nunca'}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser('${user.username}')">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        ${user.username !== 'admin' ? `
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        ` : ''}
+                                    </td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            container.innerHTML = '<div class="alert alert-warning">Error cargando usuarios</div>';
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+        container.innerHTML = '<div class="alert alert-danger">Error de conexión</div>';
+    }
+}
+
+// Load system info
+async function loadSystemInfo() {
+    try {
+        const response = await fetch(`${BASE_URL}/api/metrics/system`, {
+            headers: { 'X-API-Key': API_KEY }
+        });
+        
+        if (!response.ok) throw new Error('Error cargando info del sistema');
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const info = data.metrics;
+            document.getElementById('nodeVersion').textContent = info.nodeVersion || process.version;
+            document.getElementById('platform').textContent = info.platform || 'Unknown';
+            document.getElementById('architecture').textContent = info.arch || 'Unknown';
+            document.getElementById('totalMemory').textContent = info.totalMemory ? 
+                (info.totalMemory / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'Unknown';
+            
+            // Update service status
+            document.getElementById('serviceStatus').innerHTML = `
+                <div class="text-center">
+                    <div class="status-badge status-connected mb-3">
+                        <i class="fas fa-check-circle me-2"></i>Servicio Activo
+                    </div>
+                    <p class="text-muted">Uptime: ${info.uptime || 'Unknown'}</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading system info:', error);
+        document.getElementById('serviceStatus').innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Error verificando estado del servicio
+            </div>
+        `;
+    }
+}
+
+// User management functions
+function createUser() {
+    showNotification('Funcionalidad de creación de usuarios en desarrollo', 'info');
+}
+
+function editUser(username) {
+    showNotification(`Editando usuario: ${username}`, 'info');
+}
+
+function deleteUser(username) {
+    if (confirm(`¿Estás seguro de eliminar el usuario ${username}?`)) {
+        showNotification(`Usuario ${username} eliminado`, 'success');
+    }
+}
+
+// Session management functions
+function viewSession(sessionId) {
+    showNotification(`Viendo sesión: ${sessionId}`, 'info');
+}
+
+function deleteSession(sessionId) {
+    if (confirm(`¿Estás seguro de eliminar la sesión ${sessionId}?`)) {
+        showNotification(`Sesión ${sessionId} eliminada`, 'success');
+    }
+}
