@@ -796,7 +796,7 @@ function displaySystemInfo(systemInfo) {
                         <div class="col-md-6">
                             <div class="metric-item">
                                 <span class="metric-label">Versión Node.js</span>
-                                <span class="metric-value">${systemInfo.process?.nodeVersion || process.version || 'N/A'}</span>
+                                <span class="metric-value">${systemInfo.process?.nodeVersion || 'N/A'}</span>
                             </div>
                             <div class="metric-item">
                                 <span class="metric-label">PID</span>
