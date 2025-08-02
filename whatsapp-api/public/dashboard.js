@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Authentication check
 function checkAuthentication() {
-    const sessionData = localStorage.getItem('sessionData');
+    const sessionData = localStorage.getItem('whatsapp_api_session');
     if (!sessionData) {
         window.location.href = '/login.html';
         return;
@@ -34,7 +34,7 @@ function checkAuthentication() {
         const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
 
         if (hoursDiff > 24) {
-            localStorage.removeItem('sessionData');
+            localStorage.removeItem('whatsapp_api_session');
             window.location.href = '/login.html';
             return;
         }
@@ -354,7 +354,7 @@ function refreshData() {
 }
 
 function logout() {
-    localStorage.removeItem('sessionData');
+    localStorage.removeItem('whatsapp_api_session');
     window.location.href = '/login.html';
 }
 
