@@ -325,9 +325,22 @@ function formatDate(dateString) {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
 
-function showLoading(show) {
+function showLoading(message = 'Cargando...', show = true) {
     const overlay = document.getElementById('loadingOverlay');
-    overlay.style.display = show ? 'block' : 'none';
+    if (overlay) {
+        if (typeof message === 'boolean') {
+            show = message;
+            message = 'Cargando...';
+        }
+        overlay.style.display = show ? 'block' : 'none';
+        if (show && overlay.querySelector('.loading-text')) {
+            overlay.querySelector('.loading-text').textContent = message;
+        }
+    }
+}
+
+function hideLoading() {
+    showLoading(false);
 }
 
 function showNotification(message, type = 'info') {
@@ -400,55 +413,128 @@ document.querySelectorAll('.nav-link').forEach(link => {
 // Load sessions management
 async function loadSessionsManagement() {
     const container = document.getElementById('sessionsManagement');
+    showLoading('Cargando sesiones...');
+    
     try {
         const response = await fetch(`${BASE_URL}/api/sessions`, {
-            headers: { 'X-API-Key': API_KEY }
+            headers: { 
+                'X-API-Key': API_KEY,
+                'Content-Type': 'application/json'
+            }
         });
         
-        if (!response.ok) throw new Error('Error cargando sesiones');
+        console.log('Sessions API response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         
         const data = await response.json();
-        console.log('Sessions management data:', data); // Debug logging
+        console.log('Sessions API data:', data);
         
-        if (data.success) {
-            container.innerHTML = data.sessions.map(session => `
-                <div class="session-card">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">${session.id}</h6>
-                            <small class="text-muted">Estado: ${getStatusText(session.status)}</small>
-                        </div>
-                        <div>
-                            <button class="btn btn-sm btn-outline-primary me-1" onclick="viewSession('${session.id}')">
-                                <i class="fas fa-eye"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.id}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
+        if (data.success && data.sessions) {
+            if (data.sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No hay sesiones activas
+                        <br><br>
+                        <button class="btn btn-primary" onclick="createNewSession()">
+                            <i class="fas fa-plus me-2"></i>Crear Nueva Sesión
+                        </button>
                     </div>
-                </div>
-            `).join('');
+                `;
+            } else {
+                container.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5>Sesiones Activas (${data.sessions.length})</h5>
+                        <button class="btn btn-primary" onclick="createNewSession()">
+                            <i class="fas fa-plus me-2"></i>Nueva Sesión
+                        </button>
+                    </div>
+                    <div class="row">
+                        ${data.sessions.map(session => `
+                            <div class="col-md-6 mb-3">
+                                <div class="card session-card">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="card-title mb-1">${session.sessionId || session.id}</h6>
+                                                <p class="card-text">
+                                                    <span class="badge ${session.status === 'connected' ? 'bg-success' : session.status === 'qr' ? 'bg-warning' : 'bg-secondary'}">
+                                                        ${getStatusText(session.status)}
+                                                    </span>
+                                                </p>
+                                                ${session.connectedAt ? `<small class="text-muted">Conectado: ${formatDate(session.connectedAt)}</small>` : ''}
+                                            </div>
+                                            <div>
+                                                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewSession('${session.sessionId || session.id}')" title="Ver detalles">
+                                                    <i class="fas fa-eye"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.sessionId || session.id}')" title="Eliminar sesión">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
         } else {
-            container.innerHTML = '<div class="alert alert-warning">Error cargando sesiones</div>';
+            container.innerHTML = `
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${data.error || 'Error cargando sesiones'}
+                    <br><br>
+                    <button class="btn btn-outline-primary" onclick="loadSessionsManagement()">
+                        <i class="fas fa-redo me-2"></i>Reintentar
+                    </button>
+                </div>
+            `;
         }
     } catch (error) {
         console.error('Error loading sessions management:', error);
-        container.innerHTML = '<div class="alert alert-danger">Error de conexión</div>';
+        container.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <i class="fas fa-times-circle me-2"></i>
+                Error de conexión: ${error.message}
+                <br><br>
+                <button class="btn btn-outline-danger" onclick="loadSessionsManagement()">
+                    <i class="fas fa-redo me-2"></i>Reintentar
+                </button>
+            </div>
+        `;
     }
+    
+    hideLoading();
 }
 
 // Load users management
 async function loadUsersManagement() {
     const container = document.getElementById('usersTable');
+    showLoading('Cargando usuarios...');
+    
     try {
+        const user = JSON.parse(localStorage.getItem('user'));
         const response = await fetch(`${BASE_URL}/api/users`, {
-            headers: { 'X-API-Key': API_KEY }
+            headers: { 
+                'X-API-Key': API_KEY,
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${user?.token || localStorage.getItem('authToken')}`
+            }
         });
         
-        if (!response.ok) throw new Error('Error cargando usuarios');
+        console.log('Users API response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         
         const data = await response.json();
+        console.log('Users API data:', data);
         
         if (data.success) {
             // Update stats
@@ -500,52 +586,159 @@ async function loadUsersManagement() {
                 </div>
             `;
         } else {
-            container.innerHTML = '<div class="alert alert-warning">Error cargando usuarios</div>';
+            container.innerHTML = `
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${data.error || 'Error cargando usuarios'}
+                    <br><br>
+                    <button class="btn btn-outline-warning" onclick="loadUsersManagement()">
+                        <i class="fas fa-redo me-2"></i>Reintentar
+                    </button>
+                </div>
+            `;
         }
     } catch (error) {
-        console.error('Error loading users:', error);
-        container.innerHTML = '<div class="alert alert-danger">Error de conexión</div>';
+        console.error('Error loading users management:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <i class="fas fa-times-circle me-2"></i>
+                Error de conexión: ${error.message}
+                <br><br>
+                <button class="btn btn-outline-danger" onclick="loadUsersManagement()">
+                    <i class="fas fa-redo me-2"></i>Reintentar
+                </button>
+            </div>
+        `;
     }
+    
+    hideLoading();
 }
 
 // Load system info
 async function loadSystemInfo() {
+    const container = document.getElementById('systemInfo');
+    showLoading('Cargando información del sistema...');
+    
     try {
         const response = await fetch(`${BASE_URL}/api/metrics/system`, {
-            headers: { 'X-API-Key': API_KEY }
+            headers: { 
+                'X-API-Key': API_KEY,
+                'Content-Type': 'application/json'
+            }
         });
         
-        if (!response.ok) throw new Error('Error cargando info del sistema');
+        console.log('System API response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         
         const data = await response.json();
+        console.log('System API data:', data);
         
-        if (data.success) {
-            const info = data.metrics;
-            document.getElementById('nodeVersion').textContent = info.nodeVersion || process.version;
-            document.getElementById('platform').textContent = info.platform || 'Unknown';
-            document.getElementById('architecture').textContent = info.arch || 'Unknown';
-            document.getElementById('totalMemory').textContent = info.totalMemory ? 
-                (info.totalMemory / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'Unknown';
-            
-            // Update service status
-            document.getElementById('serviceStatus').innerHTML = `
-                <div class="text-center">
-                    <div class="status-badge status-connected mb-3">
-                        <i class="fas fa-check-circle me-2"></i>Servicio Activo
+        if (data.success && data.metrics) {
+            const metrics = data.metrics;
+            container.innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-server me-2"></i>Información del Sistema</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td><strong>Tiempo de actividad:</strong></td>
+                                        <td>${metrics.uptime?.formatted || 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Núcleos CPU:</strong></td>
+                                        <td>${metrics.cpu?.cores || 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Carga promedio:</strong></td>
+                                        <td>${metrics.cpu?.loadAverage ? metrics.cpu.loadAverage.map(l => l.toFixed(2)).join(', ') : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Memoria total:</strong></td>
+                                        <td>${metrics.memory?.total ? (metrics.memory.total / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Memoria usada:</strong></td>
+                                        <td>${metrics.memory?.used ? (metrics.memory.used / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Memoria libre:</strong></td>
+                                        <td>${metrics.memory?.free ? (metrics.memory.free / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'N/A'}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                    <p class="text-muted">Uptime: ${info.uptime || 'Unknown'}</p>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="fas fa-memory me-2"></i>Proceso Node.js</h5>
+                            </div>
+                            <div class="card-body">
+                                <table class="table table-borderless">
+                                    <tr>
+                                        <td><strong>Heap usado:</strong></td>
+                                        <td>${metrics.memory?.process?.heapUsed ? (metrics.memory.process.heapUsed / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Heap total:</strong></td>
+                                        <td>${metrics.memory?.process?.heapTotal ? (metrics.memory.process.heapTotal / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Heap límite:</strong></td>
+                                        <td>${metrics.memory?.process?.heapLimit ? (metrics.memory.process.heapLimit / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Memoria externa:</strong></td>
+                                        <td>${metrics.memory?.process?.external ? (metrics.memory.process.external / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Sesiones activas:</strong></td>
+                                        <td>${metrics.sessions?.active || 0}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Total sesiones:</strong></td>
+                                        <td>${metrics.sessions?.total || 0}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="alert alert-warning text-center">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    ${data.error || 'Error cargando información del sistema'}
+                    <br><br>
+                    <button class="btn btn-outline-warning" onclick="loadSystemInfo()">
+                        <i class="fas fa-redo me-2"></i>Reintentar
+                    </button>
                 </div>
             `;
         }
     } catch (error) {
         console.error('Error loading system info:', error);
-        document.getElementById('serviceStatus').innerHTML = `
-            <div class="alert alert-danger">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                Error verificando estado del servicio
+        container.innerHTML = `
+            <div class="alert alert-danger text-center">
+                <i class="fas fa-times-circle me-2"></i>
+                Error de conexión: ${error.message}
+                <br><br>
+                <button class="btn btn-outline-danger" onclick="loadSystemInfo()">
+                    <i class="fas fa-redo me-2"></i>Reintentar
+                </button>
             </div>
         `;
     }
+    
+    hideLoading();
 }
 
 // User management functions
@@ -564,12 +757,68 @@ function deleteUser(username) {
 }
 
 // Session management functions
+async function createNewSession() {
+    const sessionId = prompt('Ingrese el ID para la nueva sesión:');
+    if (!sessionId) return;
+    
+    showLoading('Creando sesión...');
+    
+    try {
+        const response = await fetch(`${BASE_URL}/api/start-session`, {
+            method: 'POST',
+            headers: {
+                'X-API-Key': API_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ sessionId: sessionId.trim() })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`Sesión ${sessionId} creada exitosamente`, 'success');
+            loadSessionsManagement(); // Reload sessions list
+        } else {
+            showNotification(`Error creando sesión: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error creating session:', error);
+        showNotification(`Error de conexión: ${error.message}`, 'error');
+    }
+    
+    hideLoading();
+}
+
 function viewSession(sessionId) {
     showNotification(`Viendo sesión: ${sessionId}`, 'info');
 }
 
-function deleteSession(sessionId) {
-    if (confirm(`¿Estás seguro de eliminar la sesión ${sessionId}?`)) {
-        showNotification(`Sesión ${sessionId} eliminada`, 'success');
+async function deleteSession(sessionId) {
+    if (!confirm(`¿Estás seguro de eliminar la sesión ${sessionId}?`)) return;
+    
+    showLoading('Eliminando sesión...');
+    
+    try {
+        const response = await fetch(`${BASE_URL}/api/logout/${sessionId}`, {
+            method: 'POST',
+            headers: {
+                'X-API-Key': API_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`Sesión ${sessionId} eliminada exitosamente`, 'success');
+            loadSessionsManagement(); // Reload sessions list
+        } else {
+            showNotification(`Error eliminando sesión: ${data.error}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting session:', error);
+        showNotification(`Error de conexión: ${error.message}`, 'error');
     }
+    
+    hideLoading();
 }
