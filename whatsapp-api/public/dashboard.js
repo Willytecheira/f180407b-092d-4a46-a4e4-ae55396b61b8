@@ -878,35 +878,49 @@ function displayWebhooksManagement(webhooks) {
             <div class="text-center py-5">
                 <i class="fas fa-webhook fa-3x text-muted mb-3"></i>
                 <h5 class="text-muted">No hay webhooks configurados</h5>
-                <p class="text-muted">Configura webhooks para recibir notificaciones automáticas</p>
+                <p class="text-muted">Configura webhooks para recibir notificaciones automáticas de eventos de WhatsApp</p>
                 <button class="btn btn-primary-custom btn-custom" onclick="createWebhook()">
-                    <i class="fas fa-plus me-1"></i>Crear Webhook
+                    <i class="fas fa-plus me-1"></i>Crear Primer Webhook
                 </button>
             </div>
         `;
     } else {
         html += '<div class="row">';
         webhooks.forEach(webhook => {
+            const isGlobal = webhook.type === 'global';
+            const sessionName = isGlobal ? 'Global' : webhook.sessionId;
+            
             html += `
                 <div class="col-md-6 mb-3">
                     <div class="session-card">
                         <div class="d-flex justify-content-between align-items-start mb-2">
-                            <h6 class="mb-0">${webhook.sessionId}</h6>
-                            <span class="status-badge ${webhook.enabled ? 'status-connected' : 'status-disconnected'}">
-                                ${webhook.enabled ? 'Activo' : 'Inactivo'}
+                            <h6 class="mb-0">
+                                ${isGlobal ? '<i class="fas fa-globe me-1"></i>' : '<i class="fas fa-mobile-alt me-1"></i>'}
+                                ${sessionName}
+                            </h6>
+                            <span class="status-badge ${webhook.configured ? 'status-connected' : 'status-disconnected'}">
+                                ${webhook.configured ? 'Activo' : 'Inactivo'}
                             </span>
                         </div>
                         <p class="text-muted small mb-2">
                             <i class="fas fa-link me-1"></i>
-                            URL: ${webhook.url || 'No configurada'}
+                            URL: ${webhook.url ? webhook.url.substring(0, 50) + (webhook.url.length > 50 ? '...' : '') : 'No configurada'}
+                        </p>
+                        <p class="text-muted small mb-3">
+                            <i class="fas fa-bell me-1"></i>
+                            Eventos: ${webhook.events ? webhook.events.join(', ') : 'all'}
                         </p>
                         <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-outline-primary" onclick="editWebhook('${webhook.sessionId}')">
-                                <i class="fas fa-edit me-1"></i>Editar
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteWebhook('${webhook.sessionId}')">
-                                <i class="fas fa-trash me-1"></i>Eliminar
-                            </button>
+                            ${!isGlobal ? `
+                                <button class="btn btn-sm btn-outline-primary" onclick="editWebhook('${webhook.sessionId}')">
+                                    <i class="fas fa-edit me-1"></i>Editar
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteWebhook('${webhook.sessionId}')">
+                                    <i class="fas fa-trash me-1"></i>Eliminar
+                                </button>
+                            ` : `
+                                <span class="badge bg-info">Webhook Global</span>
+                            `}
                         </div>
                     </div>
                 </div>
@@ -1139,42 +1153,89 @@ function deleteSession(sessionId) {
 }
 
 function createWebhook() {
-    const modal = `
-        <div class="modal fade" id="createWebhookModal" tabindex="-1" style="backdrop-filter: blur(5px);">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">Crear Nuevo Webhook</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="createWebhookForm">
-                            <div class="mb-3">
-                                <label for="webhookSessionId" class="form-label">Session ID</label>
-                                <input type="text" class="form-control" id="webhookSessionId" required>
+    // First, get available sessions
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch('/api/metrics/dashboard', {
+        headers: { 'X-API-Key': apiKey }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.dashboard.sessions) {
+            const sessions = data.dashboard.sessions;
+            
+            if (sessions.length === 0) {
+                showNotification('No hay sesiones disponibles. Crea una sesión primero.', 'warning');
+                return;
+            }
+            
+            let sessionOptions = sessions.map(session => 
+                `<option value="${session.id || session.sessionId}">${session.id || session.sessionId}</option>`
+            ).join('');
+            
+            const modal = `
+                <div class="modal fade" id="createWebhookModal" tabindex="-1" style="backdrop-filter: blur(5px);">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Crear Nuevo Webhook</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                             </div>
-                            <div class="mb-3">
-                                <label for="webhookUrl" class="form-label">URL del Webhook</label>
-                                <input type="url" class="form-control" id="webhookUrl" required>
+                            <div class="modal-body">
+                                <form id="createWebhookForm">
+                                    <div class="mb-3">
+                                        <label for="webhookSessionId" class="form-label">Session ID</label>
+                                        <select class="form-control" id="webhookSessionId" required>
+                                            <option value="">Selecciona una sesión</option>
+                                            ${sessionOptions}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="webhookUrl" class="form-label">URL del Webhook</label>
+                                        <input type="url" class="form-control" id="webhookUrl" required 
+                                               placeholder="https://tu-dominio.com/webhook">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Eventos (opcional)</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="message" id="eventMessage" checked>
+                                            <label class="form-check-label" for="eventMessage">
+                                                Mensajes nuevos
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="qr" id="eventQr">
+                                            <label class="form-check-label" for="eventQr">
+                                                Código QR
+                                            </label>
+                                        </div>
+                                    </div>
+                                </form>
                             </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="button" class="btn btn-primary" onclick="submitCreateWebhook()">Crear Webhook</button>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-primary" onclick="submitCreateWebhook()">Crear Webhook</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.insertAdjacentHTML('beforeend', modal);
-    const modalElement = new bootstrap.Modal(document.getElementById('createWebhookModal'));
-    modalElement.show();
-    
-    // Clean up modal when closed
-    document.getElementById('createWebhookModal').addEventListener('hidden.bs.modal', function () {
-        this.remove();
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modal);
+            const modalElement = new bootstrap.Modal(document.getElementById('createWebhookModal'));
+            modalElement.show();
+            
+            // Clean up modal when closed
+            document.getElementById('createWebhookModal').addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
+        } else {
+            showNotification('Error obteniendo sesiones disponibles', 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error getting sessions:', error);
+        showNotification('Error de conexión', 'danger');
     });
 }
 
@@ -1182,7 +1243,24 @@ function submitCreateWebhook() {
     const sessionId = document.getElementById('webhookSessionId').value;
     const webhookUrl = document.getElementById('webhookUrl').value;
     
+    if (!sessionId) {
+        showNotification('Por favor selecciona una sesión', 'warning');
+        return;
+    }
+    
+    if (!webhookUrl) {
+        showNotification('Por favor ingresa una URL de webhook', 'warning');
+        return;
+    }
+    
+    // Get selected events
+    const events = [];
+    if (document.getElementById('eventMessage')?.checked) events.push('message');
+    if (document.getElementById('eventQr')?.checked) events.push('qr');
+    
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    showLoading('Creando webhook...', true);
     
     fetch(`/api/${sessionId}/webhook`, {
         method: 'POST',
@@ -1190,10 +1268,14 @@ function submitCreateWebhook() {
             'X-API-Key': apiKey,
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ webhookUrl })
+        body: JSON.stringify({ 
+            url: webhookUrl,
+            events: events.length > 0 ? events : ['all']
+        })
     })
     .then(response => response.json())
     .then(data => {
+        hideLoading();
         if (data.success) {
             showNotification('Webhook creado exitosamente', 'success');
             bootstrap.Modal.getInstance(document.getElementById('createWebhookModal')).hide();
@@ -1203,6 +1285,7 @@ function submitCreateWebhook() {
         }
     })
     .catch(error => {
+        hideLoading();
         console.error('Error creating webhook:', error);
         showNotification('Error de conexión', 'danger');
     });
