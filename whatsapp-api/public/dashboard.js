@@ -530,24 +530,28 @@ function displaySessionsManagement(sessions) {
 function loadUsersManagement() {
     showLoading('Cargando gestión de usuarios...', true);
     
-    const sessionToken = localStorage.getItem('sessionToken');
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    const sessionData = localStorage.getItem('whatsapp_api_session');
     
-    if (!sessionToken) {
-        hideLoading();
-        document.getElementById('usersTable').innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>Sesión expirada. Recargando página...
-            </div>
-        `;
-        setTimeout(() => window.location.reload(), 2000);
-        return;
+    // Create authorization token from session data
+    let authToken = '';
+    if (sessionData) {
+        try {
+            const data = JSON.parse(sessionData);
+            authToken = Buffer.from(JSON.stringify({
+                username: data.username,
+                role: data.role || 'admin',
+                loginTime: data.loginTime
+            })).toString('base64');
+        } catch (error) {
+            console.error('Error parsing session data:', error);
+        }
     }
     
     fetch('/api/users', {
         method: 'GET',
         headers: {
-            'Authorization': `Bearer ${sessionToken}`,
+            'Authorization': `Bearer ${authToken}`,
             'X-API-Key': apiKey,
             'Content-Type': 'application/json'
         }
@@ -649,24 +653,28 @@ function displayUsersManagement(users) {
 function loadSystemInfo() {
     showLoading('Cargando información del sistema...', true);
     
-    const sessionToken = localStorage.getItem('sessionToken');
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    const sessionData = localStorage.getItem('whatsapp_api_session');
     
-    if (!sessionToken) {
-        hideLoading();
-        document.getElementById('system-content').innerHTML = `
-            <div class="alert alert-warning">
-                <i class="fas fa-exclamation-triangle me-2"></i>Sesión expirada. Recargando página...
-            </div>
-        `;
-        setTimeout(() => window.location.reload(), 2000);
-        return;
+    // Create authorization token from session data
+    let authToken = '';
+    if (sessionData) {
+        try {
+            const data = JSON.parse(sessionData);
+            authToken = Buffer.from(JSON.stringify({
+                username: data.username,
+                role: data.role || 'admin',
+                loginTime: data.loginTime
+            })).toString('base64');
+        } catch (error) {
+            console.error('Error parsing session data:', error);
+        }
     }
     
     fetch('/api/metrics/system', {
         method: 'GET',
         headers: {
-            'Authorization': `Bearer ${sessionToken}`,
+            'Authorization': `Bearer ${authToken}`,
             'X-API-Key': apiKey,
             'Content-Type': 'application/json'
         }
@@ -971,13 +979,28 @@ function submitCreateUser() {
         role: document.getElementById('newRole').value
     };
     
-    const sessionToken = localStorage.getItem('sessionToken');
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    const sessionData = localStorage.getItem('whatsapp_api_session');
+    
+    // Create authorization token from session data
+    let authToken = '';
+    if (sessionData) {
+        try {
+            const data = JSON.parse(sessionData);
+            authToken = Buffer.from(JSON.stringify({
+                username: data.username,
+                role: data.role || 'admin',
+                loginTime: data.loginTime
+            })).toString('base64');
+        } catch (error) {
+            console.error('Error parsing session data:', error);
+        }
+    }
     
     fetch('/api/users', {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${sessionToken}`,
+            'Authorization': `Bearer ${authToken}`,
             'X-API-Key': apiKey,
             'Content-Type': 'application/json'
         },
@@ -1005,13 +1028,28 @@ function editUser(username) {
 
 function deleteUser(username) {
     if (confirm(`¿Estás seguro de que quieres eliminar el usuario "${username}"?`)) {
-        const sessionToken = localStorage.getItem('sessionToken');
         const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        const sessionData = localStorage.getItem('whatsapp_api_session');
+        
+        // Create authorization token from session data
+        let authToken = '';
+        if (sessionData) {
+            try {
+                const data = JSON.parse(sessionData);
+                authToken = Buffer.from(JSON.stringify({
+                    username: data.username,
+                    role: data.role || 'admin',
+                    loginTime: data.loginTime
+                })).toString('base64');
+            } catch (error) {
+                console.error('Error parsing session data:', error);
+            }
+        }
         
         fetch(`/api/users/${username}`, {
             method: 'DELETE',
             headers: {
-                'Authorization': `Bearer ${sessionToken}`,
+                'Authorization': `Bearer ${authToken}`,
                 'X-API-Key': apiKey,
                 'Content-Type': 'application/json'
             }
