@@ -21,25 +21,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Authentication check
 function checkAuthentication() {
+    const sessionToken = localStorage.getItem('sessionToken');
     const sessionData = localStorage.getItem('whatsapp_api_session');
-    if (!sessionData) {
+    
+    if (!sessionToken && !sessionData) {
         window.location.href = '/login.html';
         return;
     }
 
     try {
-        const data = JSON.parse(sessionData);
-        const loginTime = new Date(data.loginTime);
-        const now = new Date();
-        const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
+        if (sessionData) {
+            const data = JSON.parse(sessionData);
+            const loginTime = new Date(data.loginTime);
+            const now = new Date();
+            const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
 
-        if (hoursDiff > 24) {
-            localStorage.removeItem('whatsapp_api_session');
-            window.location.href = '/login.html';
-            return;
+            if (hoursDiff > 24) {
+                localStorage.removeItem('whatsapp_api_session');
+                localStorage.removeItem('sessionToken');
+                window.location.href = '/login.html';
+                return;
+            }
+
+            document.getElementById('currentUser').textContent = data.username;
+            
+            // Store API key for future requests
+            localStorage.setItem('apiKey', API_KEY);
         }
-
-        document.getElementById('currentUser').textContent = data.username;
     } catch (error) {
         console.error('Error checking authentication:', error);
         window.location.href = '/login.html';
@@ -122,11 +130,12 @@ function initializeCharts() {
 // Load dashboard data
 async function loadDashboardData() {
     try {
-        showLoading(true);
+        showLoading('Cargando datos del dashboard...', true);
         
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
         const response = await fetch(`${BASE_URL}/api/metrics/dashboard`, {
             headers: {
-                'X-API-Key': API_KEY
+                'X-API-Key': apiKey
             }
         });
 
@@ -144,7 +153,7 @@ async function loadDashboardData() {
         console.error('Error loading dashboard data:', error);
         showNotification('Error cargando datos del dashboard: ' + error.message, 'error');
     } finally {
-        showLoading(false);
+        hideLoading();
     }
 }
 
@@ -157,20 +166,20 @@ function updateDashboard(dashboard) {
     document.getElementById('systemUptime').textContent = dashboard.overview.uptime;
 
     // Update system resources
-    const memoryUsage = parseFloat(dashboard.resources.memoryUsage);
-    const heapUsage = parseFloat(dashboard.resources.heapUsage);
+    const memoryUsage = parseFloat(dashboard.resources.memoryUsage) || 0;
+    const heapUsage = parseFloat(dashboard.resources.heapUsage) || 0;
     
     document.getElementById('memoryUsage').textContent = memoryUsage.toFixed(1) + '%';
     document.getElementById('heapUsage').textContent = heapUsage.toFixed(1) + '%';
-    document.getElementById('cpuCores').textContent = dashboard.resources.cpuCores;
-    document.getElementById('loadAverage').textContent = dashboard.resources.loadAverage[0].toFixed(2);
+    document.getElementById('cpuCores').textContent = dashboard.resources.cpuCores || 0;
+    document.getElementById('loadAverage').textContent = (dashboard.resources.loadAverage[0] || 0).toFixed(2);
 
     // Update progress bars
     document.getElementById('memoryProgress').style.width = memoryUsage + '%';
     document.getElementById('heapProgress').style.width = heapUsage + '%';
 
     // Update memory chart
-    if (dashboard.trends.memory.length > 0) {
+    if (dashboard.trends && dashboard.trends.memory && dashboard.trends.memory.length > 0) {
         const labels = dashboard.trends.memory.map(point => {
             const date = new Date(point.timestamp);
             return date.getHours().toString().padStart(2, '0') + ':' + 
@@ -190,15 +199,17 @@ function updateDashboard(dashboard) {
         initializing: 0
     };
 
-    dashboard.sessions.forEach(session => {
-        if (session.status === 'connected') {
-            statusCounts.connected++;
-        } else if (session.status === 'disconnected') {
-            statusCounts.disconnected++;
-        } else {
-            statusCounts.initializing++;
-        }
-    });
+    if (dashboard.sessions) {
+        dashboard.sessions.forEach(session => {
+            if (session.status === 'connected') {
+                statusCounts.connected++;
+            } else if (session.status === 'disconnected') {
+                statusCounts.disconnected++;
+            } else {
+                statusCounts.initializing++;
+            }
+        });
+    }
 
     sessionsChart.data.datasets[0].data = [
         statusCounts.connected,
@@ -208,10 +219,10 @@ function updateDashboard(dashboard) {
     sessionsChart.update('none');
 
     // Update alerts
-    updateAlerts(dashboard.alerts);
+    updateAlerts(dashboard.alerts || []);
 
     // Update sessions list
-    updateSessionsList(dashboard.sessions);
+    updateSessionsList(dashboard.sessions || []);
 }
 
 // Update alerts
@@ -232,11 +243,9 @@ function updateAlerts(alerts) {
 
 // Update sessions list
 function updateSessionsList(sessions) {
-    console.log('Updating sessions list:', sessions); // Debug logging
     const container = document.getElementById('sessionsContainer');
     
     if (!sessions || sessions.length === 0) {
-        console.log('No sessions found or sessions array is empty'); // Debug logging
         container.innerHTML = `
             <div class="text-center text-muted p-4">
                 <i class="fas fa-mobile-alt fa-3x mb-3"></i>
@@ -253,10 +262,10 @@ function updateSessionsList(sessions) {
                 <div>
                     <h6 class="mb-1">
                         <i class="fas fa-mobile-alt me-2"></i>
-                        ${session.id}
+                        ${session.id || session.sessionId}
                     </h6>
                     <small class="text-muted">
-                        ${session.messageCount} mensajes
+                        ${session.messageCount || 0} mensajes
                         ${session.connectedAt ? '• Conectado: ' + formatDate(session.connectedAt) : ''}
                     </small>
                 </div>
@@ -333,8 +342,8 @@ function showLoading(message = 'Cargando...', show = true) {
             message = 'Cargando...';
         }
         overlay.style.display = show ? 'block' : 'none';
-        if (show && overlay.querySelector('.loading-text')) {
-            overlay.querySelector('.loading-text').textContent = message;
+        if (show && overlay.querySelector('h5')) {
+            overlay.querySelector('h5').textContent = message;
         }
     }
 }
@@ -371,6 +380,8 @@ function refreshData() {
 
 function logout() {
     localStorage.removeItem('whatsapp_api_session');
+    localStorage.removeItem('sessionToken');
+    localStorage.removeItem('apiKey');
     window.location.href = '/login.html';
 }
 
@@ -406,419 +417,786 @@ document.querySelectorAll('.nav-link').forEach(link => {
                 document.getElementById('system-content').classList.add('active');
                 loadSystemInfo();
                 break;
+            case '#webhooks':
+                document.getElementById('webhooks-content').classList.add('active');
+                loadWebhooksManagement();
+                break;
         }
     });
 });
 
 // Load sessions management
-async function loadSessionsManagement() {
-    const container = document.getElementById('sessionsManagement');
-    showLoading('Cargando sesiones...');
+function loadSessionsManagement() {
+    showLoading('Cargando gestión de sesiones...', true);
     
-    try {
-        const response = await fetch(`${BASE_URL}/api/sessions`, {
-            headers: { 
-                'X-API-Key': API_KEY,
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        console.log('Sessions API response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch('/api/metrics/dashboard', {
+        method: 'GET',
+        headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
         }
-        
-        const data = await response.json();
-        console.log('Sessions API data:', data);
-        
-        if (data.success && data.sessions) {
-            if (data.sessions.length === 0) {
-                container.innerHTML = `
-                    <div class="alert alert-info text-center">
-                        <i class="fas fa-info-circle me-2"></i>
-                        No hay sesiones activas
-                        <br><br>
-                        <button class="btn btn-primary" onclick="createNewSession()">
-                            <i class="fas fa-plus me-2"></i>Crear Nueva Sesión
-                        </button>
-                    </div>
-                `;
+    })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                // Extract sessions from dashboard data
+                const sessions = data.dashboard.sessions || [];
+                displaySessionsManagement(sessions);
             } else {
-                container.innerHTML = `
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5>Sesiones Activas (${data.sessions.length})</h5>
-                        <button class="btn btn-primary" onclick="createNewSession()">
-                            <i class="fas fa-plus me-2"></i>Nueva Sesión
-                        </button>
-                    </div>
-                    <div class="row">
-                        ${data.sessions.map(session => `
-                            <div class="col-md-6 mb-3">
-                                <div class="card session-card">
-                                    <div class="card-body">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <h6 class="card-title mb-1">${session.sessionId || session.id}</h6>
-                                                <p class="card-text">
-                                                    <span class="badge ${session.status === 'connected' ? 'bg-success' : session.status === 'qr' ? 'bg-warning' : 'bg-secondary'}">
-                                                        ${getStatusText(session.status)}
-                                                    </span>
-                                                </p>
-                                                ${session.connectedAt ? `<small class="text-muted">Conectado: ${formatDate(session.connectedAt)}</small>` : ''}
-                                            </div>
-                                            <div>
-                                                <button class="btn btn-sm btn-outline-primary me-1" onclick="viewSession('${session.sessionId || session.id}')" title="Ver detalles">
-                                                    <i class="fas fa-eye"></i>
-                                                </button>
-                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.sessionId || session.id}')" title="Eliminar sesión">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('')}
+                document.getElementById('sessionsManagement').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Error: ${data.error || 'No se pudieron cargar las sesiones'}
                     </div>
                 `;
             }
-        } else {
-            container.innerHTML = `
-                <div class="alert alert-warning text-center">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    ${data.error || 'Error cargando sesiones'}
-                    <br><br>
-                    <button class="btn btn-outline-primary" onclick="loadSessionsManagement()">
-                        <i class="fas fa-redo me-2"></i>Reintentar
-                    </button>
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error loading sessions:', error);
+            document.getElementById('sessionsManagement').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Error de conexión: ${error.message}
                 </div>
             `;
-        }
-    } catch (error) {
-        console.error('Error loading sessions management:', error);
+        });
+}
+
+function displaySessionsManagement(sessions) {
+    const container = document.getElementById('sessionsManagement');
+    
+    if (!sessions || sessions.length === 0) {
         container.innerHTML = `
-            <div class="alert alert-danger text-center">
-                <i class="fas fa-times-circle me-2"></i>
-                Error de conexión: ${error.message}
-                <br><br>
-                <button class="btn btn-outline-danger" onclick="loadSessionsManagement()">
-                    <i class="fas fa-redo me-2"></i>Reintentar
+            <div class="text-center py-5">
+                <i class="fas fa-mobile-alt fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No hay sesiones activas</h5>
+                <p class="text-muted">Crea una nueva sesión para comenzar</p>
+                <button class="btn btn-primary-custom btn-custom" onclick="createNewSession()">
+                    <i class="fas fa-plus me-1"></i>Nueva Sesión
                 </button>
             </div>
         `;
+        return;
     }
-    
-    hideLoading();
+
+    let html = `
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5>Sesiones Activas (${sessions.length})</h5>
+            <button class="btn btn-primary-custom btn-custom" onclick="createNewSession()">
+                <i class="fas fa-plus me-1"></i>Nueva Sesión
+            </button>
+        </div>
+        <div class="row">
+    `;
+
+    sessions.forEach(session => {
+        html += `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="session-card">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h6 class="mb-0">${session.id || session.sessionId}</h6>
+                        <span class="status-badge status-${session.status}">
+                            ${getStatusText(session.status)}
+                        </span>
+                    </div>
+                    <p class="text-muted small mb-2">
+                        <i class="fas fa-clock me-1"></i>
+                        Conectado: ${session.connectedAt ? formatDate(session.connectedAt) : 'N/A'}
+                    </p>
+                    <p class="text-muted small mb-3">
+                        <i class="fas fa-paper-plane me-1"></i>
+                        Mensajes: ${session.messageCount || 0}
+                    </p>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="viewSession('${session.id || session.sessionId}')">
+                            <i class="fas fa-eye me-1"></i>Ver
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.id || session.sessionId}')">
+                            <i class="fas fa-trash me-1"></i>Eliminar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // Load users management
-async function loadUsersManagement() {
-    const container = document.getElementById('usersTable');
-    showLoading('Cargando usuarios...');
+function loadUsersManagement() {
+    showLoading('Cargando gestión de usuarios...', true);
     
-    try {
-        const user = JSON.parse(localStorage.getItem('user'));
-        const response = await fetch(`${BASE_URL}/api/users`, {
-            headers: { 
-                'X-API-Key': API_KEY,
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${user?.token || localStorage.getItem('authToken')}`
-            }
-        });
-        
-        console.log('Users API response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('Users API data:', data);
-        
-        if (data.success) {
-            // Update stats
-            const stats = data.users.reduce((acc, user) => {
-                acc.total++;
-                acc[user.role] = (acc[user.role] || 0) + 1;
-                return acc;
-            }, { total: 0, admin: 0, operator: 0, viewer: 0 });
-            
-            document.getElementById('totalUsers').textContent = stats.total;
-            document.getElementById('adminUsers').textContent = stats.admin || 0;
-            document.getElementById('operatorUsers').textContent = stats.operator || 0;
-            document.getElementById('viewerUsers').textContent = stats.viewer || 0;
-            
-            // Update table
-            container.innerHTML = `
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Usuario</th>
-                                <th>Email</th>
-                                <th>Rol</th>
-                                <th>Último Login</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${data.users.map(user => `
-                                <tr>
-                                    <td><strong>${user.username}</strong></td>
-                                    <td>${user.email || 'N/A'}</td>
-                                    <td><span class="badge bg-secondary">${user.role}</span></td>
-                                    <td>${user.lastLogin ? formatDate(user.lastLogin) : 'Nunca'}</td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser('${user.username}')">
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        ${user.username !== 'admin' ? `
-                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')">
-                                                <i class="fas fa-trash"></i>
-                                            </button>
-                                        ` : ''}
-                                    </td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-            `;
-        } else {
-            container.innerHTML = `
-                <div class="alert alert-warning text-center">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    ${data.error || 'Error cargando usuarios'}
-                    <br><br>
-                    <button class="btn btn-outline-warning" onclick="loadUsersManagement()">
-                        <i class="fas fa-redo me-2"></i>Reintentar
-                    </button>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Error loading users management:', error);
-        container.innerHTML = `
-            <div class="alert alert-danger text-center">
-                <i class="fas fa-times-circle me-2"></i>
-                Error de conexión: ${error.message}
-                <br><br>
-                <button class="btn btn-outline-danger" onclick="loadUsersManagement()">
-                    <i class="fas fa-redo me-2"></i>Reintentar
-                </button>
+    const sessionToken = localStorage.getItem('sessionToken');
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    if (!sessionToken) {
+        hideLoading();
+        document.getElementById('usersTable').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>Sesión expirada. Recargando página...
             </div>
         `;
+        setTimeout(() => window.location.reload(), 2000);
+        return;
     }
     
-    hideLoading();
+    fetch('/api/users', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                displayUsersManagement(data.users);
+            } else {
+                document.getElementById('usersTable').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Error: ${data.error || 'No se pudieron cargar los usuarios'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error loading users:', error);
+            document.getElementById('usersTable').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Error de conexión: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function displayUsersManagement(users) {
+    let tableHtml = `
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Email</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th>Último Login</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    users.forEach(user => {
+        const statusBadge = user.active 
+            ? '<span class="badge bg-success">Activo</span>'
+            : '<span class="badge bg-danger">Inactivo</span>';
+        
+        const roleBadge = user.role === 'admin' 
+            ? '<span class="badge bg-primary">Admin</span>'
+            : user.role === 'operator'
+            ? '<span class="badge bg-info">Operador</span>'
+            : '<span class="badge bg-secondary">Viewer</span>';
+
+        tableHtml += `
+            <tr>
+                <td>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-sm bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                            ${user.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <h6 class="mb-0">${user.username}</h6>
+                        </div>
+                    </div>
+                </td>
+                <td>${user.email}</td>
+                <td>${roleBadge}</td>
+                <td>${statusBadge}</td>
+                <td>${user.lastLogin ? formatDate(user.lastLogin) : 'Nunca'}</td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-primary" onclick="editUser('${user.username}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        ${user.username !== 'admin' ? `
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${user.username}')">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tableHtml += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    document.getElementById('usersTable').innerHTML = tableHtml;
 }
 
 // Load system info
-async function loadSystemInfo() {
-    const container = document.getElementById('systemInfo');
-    showLoading('Cargando información del sistema...');
+function loadSystemInfo() {
+    showLoading('Cargando información del sistema...', true);
     
-    try {
-        const response = await fetch(`${BASE_URL}/api/metrics/system`, {
-            headers: { 
-                'X-API-Key': API_KEY,
-                'Content-Type': 'application/json'
+    const sessionToken = localStorage.getItem('sessionToken');
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    if (!sessionToken) {
+        hideLoading();
+        document.getElementById('system-content').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>Sesión expirada. Recargando página...
+            </div>
+        `;
+        setTimeout(() => window.location.reload(), 2000);
+        return;
+    }
+    
+    fetch('/api/metrics/system', {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                displaySystemInfo(data.metrics);
+            } else {
+                document.getElementById('system-content').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Error: ${data.error || 'No se pudo cargar la información del sistema'}
+                    </div>
+                `;
             }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error loading system info:', error);
+            document.getElementById('system-content').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Error de conexión: ${error.message}
+                </div>
+            `;
         });
-        
-        console.log('System API response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('System API data:', data);
-        
-        if (data.success && data.metrics) {
-            const metrics = data.metrics;
-            container.innerHTML = `
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-server me-2"></i>Información del Sistema</h5>
-                            </div>
-                            <div class="card-body">
-                                <table class="table table-borderless">
-                                    <tr>
-                                        <td><strong>Tiempo de actividad:</strong></td>
-                                        <td>${metrics.uptime?.formatted || 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Núcleos CPU:</strong></td>
-                                        <td>${metrics.cpu?.cores || 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Carga promedio:</strong></td>
-                                        <td>${metrics.cpu?.loadAverage ? metrics.cpu.loadAverage.map(l => l.toFixed(2)).join(', ') : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Memoria total:</strong></td>
-                                        <td>${metrics.memory?.total ? (metrics.memory.total / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Memoria usada:</strong></td>
-                                        <td>${metrics.memory?.used ? (metrics.memory.used / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Memoria libre:</strong></td>
-                                        <td>${metrics.memory?.free ? (metrics.memory.free / 1024 / 1024 / 1024).toFixed(2) + ' GB' : 'N/A'}</td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5><i class="fas fa-memory me-2"></i>Proceso Node.js</h5>
-                            </div>
-                            <div class="card-body">
-                                <table class="table table-borderless">
-                                    <tr>
-                                        <td><strong>Heap usado:</strong></td>
-                                        <td>${metrics.memory?.process?.heapUsed ? (metrics.memory.process.heapUsed / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Heap total:</strong></td>
-                                        <td>${metrics.memory?.process?.heapTotal ? (metrics.memory.process.heapTotal / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Heap límite:</strong></td>
-                                        <td>${metrics.memory?.process?.heapLimit ? (metrics.memory.process.heapLimit / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Memoria externa:</strong></td>
-                                        <td>${metrics.memory?.process?.external ? (metrics.memory.process.external / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Sesiones activas:</strong></td>
-                                        <td>${metrics.sessions?.active || 0}</td>
-                                    </tr>
-                                    <tr>
-                                        <td><strong>Total sesiones:</strong></td>
-                                        <td>${metrics.sessions?.total || 0}</td>
-                                    </tr>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        } else {
-            container.innerHTML = `
-                <div class="alert alert-warning text-center">
-                    <i class="fas fa-exclamation-triangle me-2"></i>
-                    ${data.error || 'Error cargando información del sistema'}
-                    <br><br>
-                    <button class="btn btn-outline-warning" onclick="loadSystemInfo()">
-                        <i class="fas fa-redo me-2"></i>Reintentar
-                    </button>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Error loading system info:', error);
+}
+
+function displaySystemInfo(systemInfo) {
+    const container = document.getElementById('system-content');
+    
+    if (!systemInfo) {
         container.innerHTML = `
-            <div class="alert alert-danger text-center">
-                <i class="fas fa-times-circle me-2"></i>
-                Error de conexión: ${error.message}
-                <br><br>
-                <button class="btn btn-outline-danger" onclick="loadSystemInfo()">
-                    <i class="fas fa-redo me-2"></i>Reintentar
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>No se pudo obtener información del sistema
+            </div>
+        `;
+        return;
+    }
+
+    // Format memory values
+    const formatBytes = (bytes) => {
+        if (!bytes) return 'N/A';
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+    };
+
+    // Format uptime
+    const formatUptime = (seconds) => {
+        if (!seconds) return 'N/A';
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${days}d ${hours}h ${minutes}m`;
+    };
+
+    container.innerHTML = `
+        <h2 class="mb-4"><i class="fas fa-cog me-2"></i>Configuración del Sistema</h2>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5><i class="fas fa-server me-2"></i>Información del Sistema</h5>
+                    <div class="metric-item">
+                        <span class="metric-label">Sistema Operativo</span>
+                        <span class="metric-value">${systemInfo.os?.platform || 'N/A'} ${systemInfo.os?.release || ''}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Arquitectura</span>
+                        <span class="metric-value">${systemInfo.os?.arch || 'N/A'}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Hostname</span>
+                        <span class="metric-value">${systemInfo.os?.hostname || 'N/A'}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Tiempo de Actividad</span>
+                        <span class="metric-value">${systemInfo.uptime?.formatted || formatUptime(systemInfo.uptime?.seconds) || 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-container">
+                    <h5><i class="fas fa-chart-bar me-2"></i>Recursos del Sistema</h5>
+                    <div class="metric-item">
+                        <span class="metric-label">Memoria Total</span>
+                        <span class="metric-value">${formatBytes(systemInfo.memory?.total)}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Memoria Libre</span>
+                        <span class="metric-value">${formatBytes(systemInfo.memory?.free)}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Memoria Usada</span>
+                        <span class="metric-value">${formatBytes(systemInfo.memory?.used)} (${systemInfo.memory?.usage?.toFixed(1) || '0'}%)</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">CPU Cores</span>
+                        <span class="metric-value">${systemInfo.cpu?.cores || 'N/A'}</span>
+                    </div>
+                    <div class="metric-item">
+                        <span class="metric-label">Load Average</span>
+                        <span class="metric-value">${systemInfo.cpu?.loadAverage?.join(', ') || 'N/A'}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Process Information -->
+        <div class="row mt-4">
+            <div class="col-lg-12">
+                <div class="chart-container">
+                    <h5><i class="fas fa-cogs me-2"></i>Información del Proceso</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="metric-item">
+                                <span class="metric-label">Versión Node.js</span>
+                                <span class="metric-value">${systemInfo.process?.nodeVersion || process.version || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">PID</span>
+                                <span class="metric-value">${systemInfo.process?.pid || 'N/A'}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Heap Usado</span>
+                                <span class="metric-value">${formatBytes(systemInfo.memory?.process?.heapUsed)}</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="metric-item">
+                                <span class="metric-label">Heap Total</span>
+                                <span class="metric-value">${formatBytes(systemInfo.memory?.process?.heapTotal)}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Memoria Externa</span>
+                                <span class="metric-value">${formatBytes(systemInfo.memory?.process?.external)}</span>
+                            </div>
+                            <div class="metric-item">
+                                <span class="metric-label">Uso de Heap</span>
+                                <span class="metric-value">${systemInfo.memory?.process?.heapUsage?.toFixed(1) || '0'}%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Load webhooks management
+function loadWebhooksManagement() {
+    showLoading('Cargando gestión de webhooks...', true);
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch('/api/webhooks', {
+        method: 'GET',
+        headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+        }
+    })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                displayWebhooksManagement(data.webhooks || []);
+            } else {
+                document.getElementById('webhooksManagement').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>Error: ${data.error || 'No se pudieron cargar los webhooks'}
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error loading webhooks:', error);
+            document.getElementById('webhooksManagement').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Error de conexión: ${error.message}
+                </div>
+            `;
+        });
+}
+
+function displayWebhooksManagement(webhooks) {
+    const container = document.getElementById('webhooksManagement');
+    
+    let html = `
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h5>Webhooks Configurados (${webhooks.length})</h5>
+            <button class="btn btn-primary-custom btn-custom" onclick="createWebhook()">
+                <i class="fas fa-plus me-1"></i>Nuevo Webhook
+            </button>
+        </div>
+    `;
+
+    if (webhooks.length === 0) {
+        html += `
+            <div class="text-center py-5">
+                <i class="fas fa-webhook fa-3x text-muted mb-3"></i>
+                <h5 class="text-muted">No hay webhooks configurados</h5>
+                <p class="text-muted">Configura webhooks para recibir notificaciones automáticas</p>
+                <button class="btn btn-primary-custom btn-custom" onclick="createWebhook()">
+                    <i class="fas fa-plus me-1"></i>Crear Webhook
                 </button>
             </div>
         `;
+    } else {
+        html += '<div class="row">';
+        webhooks.forEach(webhook => {
+            html += `
+                <div class="col-md-6 mb-3">
+                    <div class="session-card">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="mb-0">${webhook.sessionId}</h6>
+                            <span class="status-badge ${webhook.enabled ? 'status-connected' : 'status-disconnected'}">
+                                ${webhook.enabled ? 'Activo' : 'Inactivo'}
+                            </span>
+                        </div>
+                        <p class="text-muted small mb-2">
+                            <i class="fas fa-link me-1"></i>
+                            URL: ${webhook.url || 'No configurada'}
+                        </p>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="editWebhook('${webhook.sessionId}')">
+                                <i class="fas fa-edit me-1"></i>Editar
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteWebhook('${webhook.sessionId}')">
+                                <i class="fas fa-trash me-1"></i>Eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
     }
-    
-    hideLoading();
+
+    container.innerHTML = html;
 }
 
-// User management functions
+// Management functions
 function createUser() {
-    showNotification('Funcionalidad de creación de usuarios en desarrollo', 'info');
+    const modal = `
+        <div class="modal fade" id="createUserModal" tabindex="-1" style="backdrop-filter: blur(5px);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Crear Nuevo Usuario</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="createUserForm">
+                            <div class="mb-3">
+                                <label for="newUsername" class="form-label">Nombre de Usuario</label>
+                                <input type="text" class="form-control" id="newUsername" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="newEmail" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="newEmail" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="newPassword" class="form-label">Contraseña</label>
+                                <input type="password" class="form-control" id="newPassword" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="newRole" class="form-label">Rol</label>
+                                <select class="form-control" id="newRole" required>
+                                    <option value="viewer">Viewer</option>
+                                    <option value="operator">Operator</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="submitCreateUser()">Crear Usuario</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modal);
+    const modalElement = new bootstrap.Modal(document.getElementById('createUserModal'));
+    modalElement.show();
+    
+    // Clean up modal when closed
+    document.getElementById('createUserModal').addEventListener('hidden.bs.modal', function () {
+        this.remove();
+    });
+}
+
+function submitCreateUser() {
+    const userData = {
+        username: document.getElementById('newUsername').value,
+        email: document.getElementById('newEmail').value,
+        password: document.getElementById('newPassword').value,
+        role: document.getElementById('newRole').value
+    };
+    
+    const sessionToken = localStorage.getItem('sessionToken');
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch('/api/users', {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Usuario creado exitosamente', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createUserModal')).hide();
+            loadUsersManagement(); // Refresh the users list
+        } else {
+            showNotification(`Error: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating user:', error);
+        showNotification('Error de conexión', 'danger');
+    });
 }
 
 function editUser(username) {
-    showNotification(`Editando usuario: ${username}`, 'info');
+    showNotification('Función de edición en desarrollo', 'info');
 }
 
 function deleteUser(username) {
-    if (confirm(`¿Estás seguro de eliminar el usuario ${username}?`)) {
-        showNotification(`Usuario ${username} eliminado`, 'success');
+    if (confirm(`¿Estás seguro de que quieres eliminar el usuario "${username}"?`)) {
+        const sessionToken = localStorage.getItem('sessionToken');
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        
+        fetch(`/api/users/${username}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${sessionToken}`,
+                'X-API-Key': apiKey,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Usuario eliminado exitosamente', 'success');
+                loadUsersManagement(); // Refresh the users list
+            } else {
+                showNotification(`Error: ${data.error}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting user:', error);
+            showNotification('Error de conexión', 'danger');
+        });
     }
 }
 
-// Session management functions
-async function createNewSession() {
-    const sessionId = prompt('Ingrese el ID para la nueva sesión:');
-    if (!sessionId) return;
-    
-    showLoading('Creando sesión...');
-    
-    try {
-        const response = await fetch(`${BASE_URL}/api/start-session`, {
+function createNewSession() {
+    const sessionId = prompt('Ingresa el ID para la nueva sesión:');
+    if (sessionId && sessionId.trim()) {
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        
+        showLoading('Creando nueva sesión...', true);
+        
+        fetch('/api/start-session', {
             method: 'POST',
             headers: {
-                'X-API-Key': API_KEY,
+                'X-API-Key': apiKey,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ sessionId: sessionId.trim() })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showNotification(`Sesión "${sessionId}" creada exitosamente`, 'success');
+                loadSessionsManagement(); // Refresh the sessions list
+            } else {
+                showNotification(`Error: ${data.error}`, 'danger');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error creating session:', error);
+            showNotification('Error de conexión', 'danger');
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification(`Sesión ${sessionId} creada exitosamente`, 'success');
-            loadSessionsManagement(); // Reload sessions list
-        } else {
-            showNotification(`Error creando sesión: ${data.error}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error creating session:', error);
-        showNotification(`Error de conexión: ${error.message}`, 'error');
     }
-    
-    hideLoading();
 }
 
 function viewSession(sessionId) {
-    showNotification(`Viendo sesión: ${sessionId}`, 'info');
+    showNotification('Función de vista de sesión en desarrollo', 'info');
 }
 
-async function deleteSession(sessionId) {
-    if (!confirm(`¿Estás seguro de eliminar la sesión ${sessionId}?`)) return;
-    
-    showLoading('Eliminando sesión...');
-    
-    try {
-        const response = await fetch(`${BASE_URL}/api/logout/${sessionId}`, {
+function deleteSession(sessionId) {
+    if (confirm(`¿Estás seguro de que quieres eliminar la sesión "${sessionId}"?`)) {
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        
+        showLoading('Eliminando sesión...', true);
+        
+        fetch(`/api/logout/${sessionId}`, {
             method: 'POST',
             headers: {
-                'X-API-Key': API_KEY,
+                'X-API-Key': apiKey,
                 'Content-Type': 'application/json'
             }
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showNotification(`Sesión "${sessionId}" eliminada exitosamente`, 'success');
+                loadSessionsManagement(); // Refresh the sessions list
+            } else {
+                showNotification(`Error: ${data.error}`, 'danger');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            console.error('Error deleting session:', error);
+            showNotification('Error de conexión', 'danger');
         });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            showNotification(`Sesión ${sessionId} eliminada exitosamente`, 'success');
-            loadSessionsManagement(); // Reload sessions list
-        } else {
-            showNotification(`Error eliminando sesión: ${data.error}`, 'error');
-        }
-    } catch (error) {
-        console.error('Error deleting session:', error);
-        showNotification(`Error de conexión: ${error.message}`, 'error');
     }
+}
+
+function createWebhook() {
+    const modal = `
+        <div class="modal fade" id="createWebhookModal" tabindex="-1" style="backdrop-filter: blur(5px);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Crear Nuevo Webhook</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="createWebhookForm">
+                            <div class="mb-3">
+                                <label for="webhookSessionId" class="form-label">Session ID</label>
+                                <input type="text" class="form-control" id="webhookSessionId" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="webhookUrl" class="form-label">URL del Webhook</label>
+                                <input type="url" class="form-control" id="webhookUrl" required>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="submitCreateWebhook()">Crear Webhook</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
     
-    hideLoading();
+    document.body.insertAdjacentHTML('beforeend', modal);
+    const modalElement = new bootstrap.Modal(document.getElementById('createWebhookModal'));
+    modalElement.show();
+    
+    // Clean up modal when closed
+    document.getElementById('createWebhookModal').addEventListener('hidden.bs.modal', function () {
+        this.remove();
+    });
+}
+
+function submitCreateWebhook() {
+    const sessionId = document.getElementById('webhookSessionId').value;
+    const webhookUrl = document.getElementById('webhookUrl').value;
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch(`/api/${sessionId}/webhook`, {
+        method: 'POST',
+        headers: {
+            'X-API-Key': apiKey,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ webhookUrl })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Webhook creado exitosamente', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('createWebhookModal')).hide();
+            loadWebhooksManagement(); // Refresh the webhooks list
+        } else {
+            showNotification(`Error: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error creating webhook:', error);
+        showNotification('Error de conexión', 'danger');
+    });
+}
+
+function editWebhook(sessionId) {
+    showNotification('Función de edición de webhook en desarrollo', 'info');
+}
+
+function deleteWebhook(sessionId) {
+    if (confirm(`¿Estás seguro de que quieres eliminar el webhook para la sesión "${sessionId}"?`)) {
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        
+        fetch(`/api/${sessionId}/webhook`, {
+            method: 'DELETE',
+            headers: {
+                'X-API-Key': apiKey,
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Webhook eliminado exitosamente', 'success');
+                loadWebhooksManagement(); // Refresh the webhooks list
+            } else {
+                showNotification(`Error: ${data.error}`, 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting webhook:', error);
+            showNotification('Error de conexión', 'danger');
+        });
+    }
 }

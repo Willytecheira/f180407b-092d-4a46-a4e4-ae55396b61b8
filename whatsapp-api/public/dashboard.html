@@ -313,6 +313,11 @@
                             <i class="fas fa-cog me-1"></i>Sistema
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#webhooks">
+                            <i class="fas fa-webhook me-1"></i>Webhooks
+                        </a>
+                    </li>
                 </ul>
                 
                 <div class="d-flex align-items-center">
@@ -501,41 +506,20 @@
             
             <!-- System Content -->
             <div id="system-content" class="tab-content p-4">
-                <h2 class="mb-4"><i class="fas fa-cog me-2"></i>Configuración del Sistema</h2>
-                <div class="row">
-                    <div class="col-lg-6">
-                        <div class="chart-container">
-                            <h5 class="mb-3">Información del Sistema</h5>
-                            <div id="systemInfo">
-                                <div class="metric-item">
-                                    <span class="metric-label">Versión Node.js</span>
-                                    <span class="metric-value" id="nodeVersion">-</span>
-                                </div>
-                                <div class="metric-item">
-                                    <span class="metric-label">Plataforma</span>
-                                    <span class="metric-value" id="platform">-</span>
-                                </div>
-                                <div class="metric-item">
-                                    <span class="metric-label">Arquitectura</span>
-                                    <span class="metric-value" id="architecture">-</span>
-                                </div>
-                                <div class="metric-item">
-                                    <span class="metric-label">Memoria Total</span>
-                                    <span class="metric-value" id="totalMemory">-</span>
-                                </div>
-                            </div>
-                        </div>
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Cargando información del sistema...</span>
                     </div>
-                    <div class="col-lg-6">
-                        <div class="chart-container">
-                            <h5 class="mb-3">Estado del Servicio</h5>
-                            <div id="serviceStatus">
-                                <div class="text-center">
-                                    <div class="spinner-border text-primary" role="status">
-                                        <span class="visually-hidden">Verificando estado...</span>
-                                    </div>
-                                </div>
-                            </div>
+                </div>
+            </div>
+            
+            <!-- Webhooks Content -->
+            <div id="webhooks-content" class="tab-content p-4">
+                <h2 class="mb-4"><i class="fas fa-webhook me-2"></i>Gestión de Webhooks</h2>
+                <div id="webhooksManagement">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Cargando webhooks...</span>
                         </div>
                     </div>
                 </div>
