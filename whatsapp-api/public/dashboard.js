@@ -10,14 +10,26 @@ let memoryChart, sessionsChart;
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    checkAuthentication();
-    initializeCharts();
-    loadDashboardData();
-    setupRealTimeUpdates();
-    setupNavigation();
+    console.log('🚀 Dashboard DOM cargado, iniciando...');
     
-    // Auto-refresh every 30 seconds
-    setInterval(loadDashboardData, 30000);
+    try {
+        checkAuthentication();
+        
+        // Wait a bit for any dynamic content to load
+        setTimeout(() => {
+            initializeCharts();
+            loadDashboardData();
+            setupRealTimeUpdates();
+            setupNavigation();
+        }, 100);
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadDashboardData, 30000);
+        
+        console.log('✅ Dashboard inicializado correctamente');
+    } catch (error) {
+        console.error('❌ Error inicializando dashboard:', error);
+    }
 });
 
 // Setup navigation
@@ -99,9 +111,34 @@ function checkAuthentication() {
 
 // Initialize charts
 function initializeCharts() {
-    // Memory Usage Chart
-    const memoryCtx = document.getElementById('memoryChart').getContext('2d');
-    memoryChart = new Chart(memoryCtx, {
+    try {
+        console.log('📈 Inicializando gráficos...');
+        
+        // Verify Chart.js is loaded
+        if (typeof Chart === 'undefined') {
+            console.error('❌ Chart.js no está cargado');
+            return;
+        }
+        
+        // Verify DOM elements exist
+        const memoryElement = document.getElementById('memoryChart');
+        const sessionsElement = document.getElementById('sessionsChart');
+        
+        if (!memoryElement) {
+            console.error('❌ Elemento memoryChart no encontrado');
+            return;
+        }
+        
+        if (!sessionsElement) {
+            console.error('❌ Elemento sessionsChart no encontrado');
+            return;
+        }
+        
+        console.log('✅ Elementos DOM encontrados, creando gráficos...');
+        
+        // Memory Usage Chart
+        const memoryCtx = memoryElement.getContext('2d');
+        memoryChart = new Chart(memoryCtx, {
         type: 'line',
         data: {
             labels: [],
@@ -142,41 +179,51 @@ function initializeCharts() {
         }
     });
 
-    // Sessions Status Chart
-    const sessionsCtx = document.getElementById('sessionsChart').getContext('2d');
-    sessionsChart = new Chart(sessionsCtx, {
-        type: 'doughnut',
-        data: {
-            labels: ['Conectadas', 'Desconectadas', 'Inicializando'],
-            datasets: [{
-                data: [0, 0, 0],
-                backgroundColor: [
-                    '#28a745',
-                    '#dc3545',
-                    '#ffc107'
-                ],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'bottom'
+        // Sessions Status Chart
+        const sessionsCtx = sessionsElement.getContext('2d');
+        sessionsChart = new Chart(sessionsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Conectadas', 'Desconectadas', 'Inicializando'],
+                datasets: [{
+                    data: [0, 0, 0],
+                    backgroundColor: [
+                        '#28a745',
+                        '#dc3545',
+                        '#ffc107'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
                 }
             }
-        }
-    });
+        });
+        
+        console.log('✅ Gráficos inicializados correctamente');
+    } catch (error) {
+        console.error('❌ Error inicializando gráficos:', error);
+        console.error('❌ Error stack:', error.stack);
+    }
 }
 
 // Load dashboard data
 async function loadDashboardData() {
     try {
         console.log('🔄 Cargando datos del dashboard...');
+        console.log('🔑 API Key being used:', API_KEY);
+        console.log('🌐 Base URL:', BASE_URL);
+        
         showLoading('Cargando datos del dashboard...', true);
         
         const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        console.log('🔑 Final API Key:', apiKey);
         
         const response = await fetch(`${BASE_URL}/api/metrics/dashboard`, {
             method: 'GET',
@@ -187,14 +234,19 @@ async function loadDashboardData() {
             credentials: 'include'
         });
 
-        console.log('📡 Respuesta HTTP:', response.status);
+        console.log('📡 Respuesta HTTP:', response.status, response.statusText);
+        console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
 
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('❌ Error response body:', errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
 
         const data = await response.json();
-        console.log('📊 Dashboard data received:', !!data.dashboard);
+        console.log('📊 Dashboard data received:', data);
+        console.log('📊 Dashboard overview:', data?.dashboard?.overview);
+        console.log('📊 Dashboard resources:', data?.dashboard?.resources);
         
         if (data.success && data.dashboard) {
             updateDashboard(data.dashboard);
@@ -204,7 +256,8 @@ async function loadDashboardData() {
         }
     } catch (error) {
         console.error('💥 Error cargando dashboard:', error);
-        showNotification('Cargando datos básicos...', 'info');
+        console.error('💥 Error stack:', error.stack);
+        showNotification('Error cargando dashboard: ' + error.message, 'error');
         await loadBasicMetrics(); // Usar fallback
     } finally {
         hideLoading();
@@ -274,85 +327,120 @@ async function loadBasicMetrics() {
 
 // Update dashboard with new data
 function updateDashboard(dashboard) {
-    console.log('🎯 Actualizando dashboard...');
+    console.log('🎯 Actualizando dashboard con data:', dashboard);
     
     if (!dashboard) {
         console.error('❌ No dashboard data provided');
         return;
     }
     
-    // Update overview statistics with fallbacks
-    const overview = dashboard.overview || {};
-    document.getElementById('totalSessions').textContent = overview.totalSessions || 0;
-    document.getElementById('activeSessions').textContent = overview.activeSessions || 0;
-    document.getElementById('totalMessages').textContent = overview.totalMessages || 0;
-    document.getElementById('systemUptime').textContent = overview.uptime || '0m';
-
-    // Update system resources with fallbacks
-    const resources = dashboard.resources || {};
-    const memoryUsage = parseFloat(resources.memoryUsage) || 0;
-    const heapUsage = parseFloat(resources.heapUsage) || 0;
-    
-    document.getElementById('memoryUsage').textContent = memoryUsage.toFixed(1) + '%';
-    document.getElementById('heapUsage').textContent = heapUsage.toFixed(1) + '%';
-    document.getElementById('cpuCores').textContent = resources.cpuCores || 1;
-    document.getElementById('loadAverage').textContent = (resources.loadAverage?.[0] || 0).toFixed(2);
-
-    // Update progress bars
-    document.getElementById('memoryProgress').style.width = Math.min(memoryUsage, 100) + '%';
-    document.getElementById('heapProgress').style.width = Math.min(heapUsage, 100) + '%';
-
-    // Update memory chart with error handling
     try {
-        if (dashboard.trends?.memory?.length > 0) {
-            const memoryData = dashboard.trends.memory;
-            const labels = memoryData.map(point => {
-                const date = new Date(point.timestamp);
-                return date.getHours().toString().padStart(2, '0') + ':' + 
-                       date.getMinutes().toString().padStart(2, '0');
-            });
-            const data = memoryData.map(point => parseFloat(point.usage) || 0);
+        // Update overview statistics with fallbacks
+        const overview = dashboard.overview || {};
+        console.log('📊 Actualizando overview:', overview);
+        
+        const totalSessionsEl = document.getElementById('totalSessions');
+        const activeSessionsEl = document.getElementById('activeSessions');
+        const totalMessagesEl = document.getElementById('totalMessages');
+        const systemUptimeEl = document.getElementById('systemUptime');
+        
+        if (totalSessionsEl) totalSessionsEl.textContent = overview.totalSessions || 0;
+        if (activeSessionsEl) activeSessionsEl.textContent = overview.activeSessions || 0;
+        if (totalMessagesEl) totalMessagesEl.textContent = overview.totalMessages || 0;
+        if (systemUptimeEl) systemUptimeEl.textContent = overview.uptime || '0m';
 
-            memoryChart.data.labels = labels;
-            memoryChart.data.datasets[0].data = data;
-            memoryChart.update('none');
+        // Update system resources with fallbacks
+        const resources = dashboard.resources || {};
+        const memoryUsage = parseFloat(resources.memoryUsage) || 0;
+        const heapUsage = parseFloat(resources.heapUsage) || 0;
+        
+        console.log('💾 Actualizando recursos:', resources);
+        
+        const memoryUsageEl = document.getElementById('memoryUsage');
+        const heapUsageEl = document.getElementById('heapUsage');
+        const cpuCoresEl = document.getElementById('cpuCores');
+        const loadAverageEl = document.getElementById('loadAverage');
+        const memoryProgressEl = document.getElementById('memoryProgress');
+        const heapProgressEl = document.getElementById('heapProgress');
+        
+        if (memoryUsageEl) memoryUsageEl.textContent = memoryUsage.toFixed(1) + '%';
+        if (heapUsageEl) heapUsageEl.textContent = heapUsage.toFixed(1) + '%';
+        if (cpuCoresEl) cpuCoresEl.textContent = resources.cpuCores || 1;
+        if (loadAverageEl) loadAverageEl.textContent = (resources.loadAverage?.[0] || 0).toFixed(2);
+
+        // Update progress bars
+        if (memoryProgressEl) memoryProgressEl.style.width = Math.min(memoryUsage, 100) + '%';
+        if (heapProgressEl) heapProgressEl.style.width = Math.min(heapUsage, 100) + '%';
+
+        // Update memory chart with error handling
+        try {
+            console.log('📈 Actualizando gráfico de memoria...');
+            if (memoryChart && dashboard.trends?.memory?.length > 0) {
+                const memoryData = dashboard.trends.memory;
+                console.log('📈 Memory trends data:', memoryData);
+                
+                const labels = memoryData.map(point => {
+                    const date = new Date(point.timestamp);
+                    return date.getHours().toString().padStart(2, '0') + ':' + 
+                           date.getMinutes().toString().padStart(2, '0');
+                });
+                const data = memoryData.map(point => parseFloat(point.usage) || 0);
+
+                memoryChart.data.labels = labels;
+                memoryChart.data.datasets[0].data = data;
+                memoryChart.update('none');
+                console.log('✅ Gráfico de memoria actualizado');
+            } else {
+                console.log('⚠️ No hay datos de memoria o gráfico no inicializado');
+            }
+        } catch (error) {
+            console.error('❌ Error updating memory chart:', error);
         }
-    } catch (error) {
-        console.error('Error updating memory chart:', error);
-    }
 
-    // Update sessions chart with error handling
-    try {
-        const statusCounts = { connected: 0, disconnected: 0, initializing: 0 };
+        // Update sessions chart with error handling
+        try {
+            console.log('📊 Actualizando gráfico de sesiones...');
+            if (sessionsChart) {
+                const statusCounts = { connected: 0, disconnected: 0, initializing: 0 };
 
-        if (dashboard.sessions && Array.isArray(dashboard.sessions)) {
-            dashboard.sessions.forEach(session => {
-                const status = session.status || 'disconnected';
-                if (status === 'connected') {
-                    statusCounts.connected++;
-                } else if (status === 'disconnected') {
-                    statusCounts.disconnected++;
-                } else {
-                    statusCounts.initializing++;
+                if (dashboard.sessions && Array.isArray(dashboard.sessions)) {
+                    console.log('📊 Sessions data:', dashboard.sessions);
+                    dashboard.sessions.forEach(session => {
+                        const status = session.status || 'disconnected';
+                        if (status === 'connected') {
+                            statusCounts.connected++;
+                        } else if (status === 'disconnected') {
+                            statusCounts.disconnected++;
+                        } else {
+                            statusCounts.initializing++;
+                        }
+                    });
                 }
-            });
+
+                console.log('📊 Status counts:', statusCounts);
+                sessionsChart.data.datasets[0].data = [
+                    statusCounts.connected,
+                    statusCounts.disconnected,
+                    statusCounts.initializing
+                ];
+                sessionsChart.update('none');
+                console.log('✅ Gráfico de sesiones actualizado');
+            } else {
+                console.log('⚠️ Gráfico de sesiones no inicializado');
+            }
+        } catch (error) {
+            console.error('❌ Error updating sessions chart:', error);
         }
 
-        sessionsChart.data.datasets[0].data = [
-            statusCounts.connected,
-            statusCounts.disconnected,
-            statusCounts.initializing
-        ];
-        sessionsChart.update('none');
+        // Update alerts and sessions list
+        updateAlerts(dashboard.alerts || []);
+        updateSessionsList(dashboard.sessions || []);
+        
+        console.log('✅ Dashboard actualizado correctamente');
     } catch (error) {
-        console.error('Error updating sessions chart:', error);
+        console.error('❌ Error en updateDashboard:', error);
+        console.error('❌ Error stack:', error.stack);
     }
-
-    // Update alerts and sessions list
-    updateAlerts(dashboard.alerts || []);
-    updateSessionsList(dashboard.sessions || []);
-    
-    console.log('✅ Dashboard actualizado correctamente');
 }
 
 // Update alerts
@@ -1484,7 +1572,7 @@ function viewSession(sessionId) {
                                          
                                          <button class="btn btn-danger" onclick="deleteSession('${sessionId}'); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
                                              <i class="fas fa-trash me-2"></i>Eliminar Sesión
-                                        </button>
+                                         </button>
                                     </div>
                                 </div>
                             </div>
