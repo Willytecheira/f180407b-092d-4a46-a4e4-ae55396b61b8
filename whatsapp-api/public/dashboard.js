@@ -1320,35 +1320,50 @@ function editWebhook(sessionId) {
     // Obtener configuración actual del webhook
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
     
+    console.log('🔧 Editando webhook para sesión:', sessionId);
+    console.log('🔑 API Key:', apiKey ? 'Presente' : 'No encontrada');
+    
     fetch(`/api/${sessionId}/webhook`, {
         method: 'GET',
         headers: {
             'X-API-Key': apiKey
         }
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('📡 Respuesta del servidor:', response.status, response.statusText);
+        return response.json();
+    })
     .then(data => {
+        console.log('📦 Datos recibidos:', data);
+        
         if (data.success && data.webhookUrl) {
-            // Rellenar el modal con los datos actuales
-            document.getElementById('sessionIdWebhook').value = sessionId;
-            document.getElementById('webhookUrl').value = data.webhookUrl;
+            // Crear el modal para editar (reutilizar el modal de creación)
+            createWebhookForSession(sessionId);
             
-            // Marcar los eventos actuales
-            const events = data.events || [];
-            document.getElementById('eventMessage').checked = events.includes('message-received');
-            document.getElementById('eventDelivered').checked = events.includes('message-delivered');
-            document.getElementById('eventFromMe').checked = events.includes('message-from-me');
-            document.getElementById('eventQr').checked = events.includes('qr');
+            // Esperar a que el modal se cree y luego rellenar con datos actuales
+            setTimeout(() => {
+                document.getElementById('webhookSessionId').value = sessionId;
+                document.getElementById('webhookUrl').value = data.webhookUrl;
+                
+                // Marcar los eventos actuales
+                const events = data.events || [];
+                document.getElementById('eventMessage').checked = events.includes('message-received');
+                if (document.getElementById('eventDelivered')) {
+                    document.getElementById('eventDelivered').checked = events.includes('message-delivered');
+                }
+                if (document.getElementById('eventFromMe')) {
+                    document.getElementById('eventFromMe').checked = events.includes('message-from-me');
+                }
+                document.getElementById('eventQr').checked = events.includes('qr');
+            }, 100);
             
-            // Mostrar el modal
-            const modal = new bootstrap.Modal(document.getElementById('webhookModal'));
-            modal.show();
         } else {
+            console.log('⚠️ No hay webhook configurado o respuesta sin éxito:', data);
             showNotification('No hay webhook configurado para esta sesión', 'warning');
         }
     })
     .catch(error => {
-        console.error('Error obteniendo webhook:', error);
+        console.error('❌ Error obteniendo webhook:', error);
         showNotification('Error obteniendo configuración del webhook', 'danger');
     });
 }
