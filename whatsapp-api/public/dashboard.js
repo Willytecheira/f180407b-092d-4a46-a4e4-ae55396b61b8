@@ -154,8 +154,8 @@ async function loadDashboardData() {
         console.log('📊 Datos recibidos:', data);
         
         if (data.success) {
-            console.log('✅ Dashboard data:', data.data);
-            updateDashboard(data.data);
+            console.log('✅ Dashboard data:', data.dashboard);
+            updateDashboard(data.dashboard);
         } else {
             console.error('❌ Error en respuesta:', data.error);
             // Try fallback data loading
