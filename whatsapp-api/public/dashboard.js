@@ -1317,7 +1317,40 @@ function submitCreateWebhook() {
 }
 
 function editWebhook(sessionId) {
-    showNotification('Función de edición de webhook en desarrollo', 'info');
+    // Obtener configuración actual del webhook
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch(`/api/${sessionId}/webhook`, {
+        method: 'GET',
+        headers: {
+            'X-API-Key': apiKey
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.webhookUrl) {
+            // Rellenar el modal con los datos actuales
+            document.getElementById('sessionIdWebhook').value = sessionId;
+            document.getElementById('webhookUrl').value = data.webhookUrl;
+            
+            // Marcar los eventos actuales
+            const events = data.events || [];
+            document.getElementById('eventMessage').checked = events.includes('message-received');
+            document.getElementById('eventDelivered').checked = events.includes('message-delivered');
+            document.getElementById('eventFromMe').checked = events.includes('message-from-me');
+            document.getElementById('eventQr').checked = events.includes('qr');
+            
+            // Mostrar el modal
+            const modal = new bootstrap.Modal(document.getElementById('webhookModal'));
+            modal.show();
+        } else {
+            showNotification('No hay webhook configurado para esta sesión', 'warning');
+        }
+    })
+    .catch(error => {
+        console.error('Error obteniendo webhook:', error);
+        showNotification('Error obteniendo configuración del webhook', 'danger');
+    });
 }
 
 function deleteWebhook(sessionId) {
