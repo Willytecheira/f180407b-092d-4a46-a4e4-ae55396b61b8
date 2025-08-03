@@ -138,7 +138,7 @@ async function loadDashboardData() {
         
         const response = await fetch(`${BASE_URL}/api/metrics/dashboard`, {
             headers: {
-                'X-API-Key': apiKey
+                'x-api-key': apiKey
             }
         });
 
@@ -154,8 +154,8 @@ async function loadDashboardData() {
         console.log('📊 Datos recibidos:', data);
         
         if (data.success) {
-            console.log('✅ Dashboard data:', data.dashboard);
-            updateDashboard(data.dashboard);
+            console.log('✅ Dashboard data:', data.data);
+            updateDashboard(data.data);
         } else {
             console.error('❌ Error en respuesta:', data.error);
             throw new Error(data.error);
@@ -454,7 +454,7 @@ function loadSessionsManagement() {
     fetch('/api/metrics/dashboard', {
         method: 'GET',
         headers: {
-            'X-API-Key': apiKey,
+            'x-api-key': apiKey,
             'Content-Type': 'application/json'
         }
     })
@@ -574,7 +574,7 @@ function loadUsersManagement() {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${authToken}`,
-            'X-API-Key': apiKey,
+            'x-api-key': apiKey,
             'Content-Type': 'application/json'
         }
     })
@@ -699,7 +699,7 @@ function loadSystemInfo() {
         method: 'GET',
         headers: {
             'Authorization': `Bearer ${authToken}`,
-            'X-API-Key': apiKey,
+            'x-api-key': apiKey,
             'Content-Type': 'application/json'
         }
     })
@@ -857,7 +857,7 @@ function loadWebhooksManagement() {
     fetch('/api/webhooks', {
         method: 'GET',
         headers: {
-            'X-API-Key': apiKey,
+            'x-api-key': apiKey,
             'Content-Type': 'application/json'
         }
     })
@@ -1039,7 +1039,7 @@ function submitCreateUser() {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${authToken}`,
-            'X-API-Key': apiKey,
+            'x-api-key': apiKey,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(userData)
@@ -1088,7 +1088,7 @@ function deleteUser(username) {
             method: 'DELETE',
             headers: {
                 'Authorization': `Bearer ${authToken}`,
-                'X-API-Key': apiKey,
+                'x-api-key': apiKey,
                 'Content-Type': 'application/json'
             }
         })
@@ -1118,7 +1118,7 @@ function createNewSession() {
         fetch('/api/start-session', {
             method: 'POST',
             headers: {
-                'X-API-Key': apiKey,
+                'x-api-key': apiKey,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ sessionId: sessionId.trim() })
@@ -1149,13 +1149,13 @@ function viewSession(sessionId) {
     // Obtener información de la sesión y métricas
     Promise.all([
         fetch(`/api/${sessionId}/status`, {
-            headers: { 'X-API-Key': apiKey }
+            headers: { 'x-api-key': apiKey }
         }),
         fetch(`/api/${sessionId}/webhook`, {
-            headers: { 'X-API-Key': apiKey }
+            headers: { 'x-api-key': apiKey }
         }),
         fetch(`/api/metrics`, {
-            headers: { 'X-API-Key': apiKey }
+            headers: { 'x-api-key': apiKey }
         })
     ])
     .then(responses => Promise.all(responses.map(r => r.json())))
@@ -1341,7 +1341,7 @@ function deleteSession(sessionId) {
         fetch(`/api/logout/${sessionId}`, {
             method: 'POST',
             headers: {
-                'X-API-Key': apiKey,
+                'x-api-key': apiKey,
                 'Content-Type': 'application/json'
             }
         })
@@ -1368,7 +1368,7 @@ function createWebhook() {
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
     
     fetch('/api/metrics/dashboard', {
-        headers: { 'X-API-Key': apiKey }
+        headers: { 'x-api-key': apiKey }
     })
     .then(response => response.json())
     .then(data => {
@@ -1487,7 +1487,7 @@ function submitEditWebhook() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-API-Key': apiKey
+            'x-api-key': apiKey
         },
         body: JSON.stringify({
             url: webhookUrl,
@@ -1525,7 +1525,7 @@ function loadRecentMessages(sessionId) {
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
     
     fetch(`/api/${sessionId}/messages`, {
-        headers: { 'X-API-Key': apiKey }
+        headers: { 'x-api-key': apiKey }
     })
     .then(response => response.json())
     .then(data => {
@@ -1571,7 +1571,7 @@ function reconnectSession(sessionId) {
     
     fetch(`/api/${sessionId}/restart`, {
         method: 'POST',
-        headers: { 'X-API-Key': apiKey }
+        headers: { 'x-api-key': apiKey }
     })
     .then(response => response.json())
     .then(data => {
@@ -1596,7 +1596,7 @@ function getSessionQR(sessionId) {
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
     
     fetch(`/api/${sessionId}/qr`, {
-        headers: { 'X-API-Key': apiKey }
+        headers: { 'x-api-key': apiKey }
     })
     .then(response => response.json())
     .then(data => {
@@ -1678,7 +1678,7 @@ function submitCreateWebhook() {
     fetch(`/api/${sessionId}/webhook`, {
         method: 'POST',
         headers: {
-            'X-API-Key': apiKey,
+            'x-api-key': apiKey,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
@@ -1711,7 +1711,7 @@ function editWebhook(sessionId) {
     fetch(`/api/${sessionId}/webhook`, {
         method: 'GET',
         headers: {
-            'X-API-Key': apiKey
+            'x-api-key': apiKey
         }
     })
     .then(response => {
@@ -1857,7 +1857,7 @@ function deleteWebhook(sessionId) {
         fetch(`/api/${sessionId}/webhook`, {
             method: 'DELETE',
             headers: {
-                'X-API-Key': apiKey,
+                'x-api-key': apiKey,
                 'Content-Type': 'application/json'
             }
         })
