@@ -9,11 +9,11 @@ const socket = io();
 let memoryChart, sessionsChart;
 
 // Initialize dashboard
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
     console.log('🚀 Dashboard DOM cargado, iniciando...');
     
     try {
-        checkAuthentication();
+        await checkAuthentication();
         
         // Wait a bit for any dynamic content to load
         setTimeout(() => {
@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Dashboard inicializado correctamente');
     } catch (error) {
         console.error('❌ Error inicializando dashboard:', error);
+        window.location.href = '/login.html';
     }
 });
 
@@ -75,11 +76,12 @@ function setupNavigation() {
 }
 
 // Authentication check
-function checkAuthentication() {
+async function checkAuthentication() {
     const sessionToken = localStorage.getItem('sessionToken');
     const sessionData = localStorage.getItem('whatsapp_api_session');
     
     if (!sessionToken && !sessionData) {
+        console.log('❌ No session data found, redirecting to login');
         window.location.href = '/login.html';
         return;
     }
@@ -92,19 +94,44 @@ function checkAuthentication() {
             const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
 
             if (hoursDiff > 24) {
+                console.log('❌ Session expired, redirecting to login');
                 localStorage.removeItem('whatsapp_api_session');
                 localStorage.removeItem('sessionToken');
                 window.location.href = '/login.html';
                 return;
             }
 
-            document.getElementById('currentUser').textContent = data.username;
-            
-            // Store API key for future requests
-            localStorage.setItem('apiKey', API_KEY);
+            // Validate session with server
+            try {
+                const response = await fetch(`${BASE_URL}/api/metrics/system`, {
+                    headers: {
+                        'x-api-key': API_KEY,
+                        'x-session-token': sessionToken,
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server validation failed: ${response.status}`);
+                }
+
+                console.log('✅ Session validated with server');
+                document.getElementById('currentUser').textContent = data.username;
+                
+                // Store API key for future requests
+                localStorage.setItem('apiKey', API_KEY);
+            } catch (serverError) {
+                console.error('❌ Server session validation failed:', serverError);
+                localStorage.removeItem('whatsapp_api_session');
+                localStorage.removeItem('sessionToken');
+                window.location.href = '/login.html';
+                return;
+            }
         }
     } catch (error) {
-        console.error('Error checking authentication:', error);
+        console.error('❌ Error checking authentication:', error);
+        localStorage.removeItem('whatsapp_api_session');
+        localStorage.removeItem('sessionToken');
         window.location.href = '/login.html';
     }
 }
