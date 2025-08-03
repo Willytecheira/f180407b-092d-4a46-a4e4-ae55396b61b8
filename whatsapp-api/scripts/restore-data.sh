@@ -16,7 +16,9 @@ restore_from_latest() {
         return 1
     fi
 
-    BACKUP_FILE=$(basename "$(cat .last_backup)")
+    BACKUP_FILE=$(cat .last_backup)
+    # Remove any path prefix if it exists
+    BACKUP_FILE=$(basename "$BACKUP_FILE")
     BACKUP_PATH="./backups/$BACKUP_FILE"
 
     if [ ! -f "$BACKUP_PATH" ]; then
