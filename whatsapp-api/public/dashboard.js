@@ -207,7 +207,7 @@ async function loadBasicMetrics() {
             const sessionsData = await sessionsResponse.json();
             if (sessionsData.success && sessionsData.sessions) {
                 const sessions = sessionsData.sessions;
-                const activeSessions = sessions.filter(s => s.connected).length;
+                const activeSessions = sessions.filter(s => s.status === 'connected').length;
                 
                 document.getElementById('totalSessions').textContent = sessions.length;
                 document.getElementById('activeSessions').textContent = activeSessions;
