@@ -118,16 +118,29 @@ module.exports = (metricsManager, sessionManager) => {
   // GET /api/metrics/dashboard - Resumen para dashboard
   router.get('/dashboard', (req, res) => {
   try {
-      const currentMetrics = metricsManager.getCurrentSystemMetrics();
-      const health = metricsManager.getHealthStatus();
+      const currentMetrics = metricsManager.getCurrentSystemMetrics() || {};
+      const health = metricsManager.getHealthStatus() || { status: 'unknown', alerts: [] };
       const sessions = sessionManager.getAllSessions() || [];
       
       // Calcular estadísticas rápidas
-      const connectedSessions = sessions.filter(s => s.status === 'connected');
-      const totalMessages = sessions.reduce((total, session) => {
-        const messages = sessionManager.getSessionMessages(session.sessionId, 100);
-        return total + (messages ? messages.length : 0);
-      }, 0);
+      const connectedSessions = sessions.filter(s => s && s.status === 'connected');
+      
+      // Calcular mensajes de forma más segura
+      let totalMessages = 0;
+      try {
+        totalMessages = sessions.reduce((total, session) => {
+          if (!session || !session.sessionId) return total;
+          try {
+            const messages = sessionManager.getSessionMessages(session.sessionId, 100);
+            return total + (Array.isArray(messages) ? messages.length : 0);
+          } catch (msgError) {
+            return total;
+          }
+        }, 0);
+      } catch (msgError) {
+        console.error('Error calculating total messages:', msgError);
+        totalMessages = 0;
+      }
       
       console.log('📈 Stats calculated - Connected:', connectedSessions.length, 'Total msgs:', totalMessages);
 
@@ -159,24 +172,24 @@ module.exports = (metricsManager, sessionManager) => {
       
       const dashboard = {
         overview: {
-          totalSessions: sessions.length,
-          activeSessions: connectedSessions.length,
-          totalMessages,
-          uptime: currentMetrics?.uptime?.formatted || '0m',
-          systemStatus: health?.status || 'healthy'
+          totalSessions: sessions.length || 0,
+          activeSessions: connectedSessions.length || 0,
+          totalMessages: totalMessages || 0,
+          uptime: (currentMetrics && currentMetrics.uptime && currentMetrics.uptime.formatted) || '0m',
+          systemStatus: (health && health.status) || 'healthy'
         },
         resources: {
-          memoryUsage: currentMetrics?.memory?.usage || 0,
-          heapUsage: currentMetrics?.memory?.process?.heapUsage || 0,
-          cpuCores: currentMetrics?.cpu?.cores || 0,
-          loadAverage: currentMetrics?.cpu?.loadAverage || [0, 0, 0]
+          memoryUsage: (currentMetrics && currentMetrics.memory && currentMetrics.memory.usage) || 0,
+          heapUsage: (currentMetrics && currentMetrics.memory && currentMetrics.memory.process && currentMetrics.memory.process.heapUsage) || 0,
+          cpuCores: (currentMetrics && currentMetrics.cpu && currentMetrics.cpu.cores) || 1,
+          loadAverage: (currentMetrics && currentMetrics.cpu && currentMetrics.cpu.loadAverage) || [0, 0, 0]
         },
         sessions: sessions.map(session => ({
-          id: session.sessionId,
-          status: session.status,
-          connectedAt: session.connectedAt,
+          id: session.sessionId || 'unknown',
+          status: session.status || 'disconnected',
+          connectedAt: session.connectedAt || new Date().toISOString(),
           messageCount: session.messageCount || 0,
-          hasQR: session.hasQR
+          hasQR: session.hasQR || false
         })),
         trends: {
           memory: memoryTrends,

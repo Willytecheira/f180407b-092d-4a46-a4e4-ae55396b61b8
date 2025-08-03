@@ -1830,15 +1830,15 @@ function editWebhook(sessionId) {
                     showNotification('Error: No se pudo acceder al formulario', 'danger');
                 }
             }, 200);
-                
-            } else {
-                console.log('⚠️ Respuesta exitosa pero sin webhookUrl');
-                showNotification('No hay webhook configurado para esta sesión', 'warning');
-            }
+            
         } else {
-            console.log('❌ Respuesta no exitosa:', data);
-            showNotification(data.error || 'Error obteniendo webhook', 'danger');
+            console.log('⚠️ Respuesta exitosa pero sin webhookUrl');
+            showNotification('No hay webhook configurado para esta sesión', 'warning');
         }
+    } else {
+        console.log('❌ Respuesta no exitosa:', data);
+        showNotification(data.error || 'Error obteniendo webhook', 'danger');
+    }
     })
     .catch(error => {
         console.error('💥 Error completo:', {
