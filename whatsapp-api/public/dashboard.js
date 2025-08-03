@@ -1317,54 +1317,102 @@ function submitCreateWebhook() {
 }
 
 function editWebhook(sessionId) {
+    console.log('🎯 INICIO editWebhook - sessionId:', sessionId);
+    
     // Obtener configuración actual del webhook
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    console.log('🔑 API Key obtenida:', apiKey ? 'Presente' : 'No encontrada');
     
-    console.log('🔧 Editando webhook para sesión:', sessionId);
-    console.log('🔑 API Key:', apiKey ? 'Presente' : 'No encontrada');
+    const url = `/api/${sessionId}/webhook`;
+    console.log('🌐 URL a consultar:', url);
     
-    fetch(`/api/${sessionId}/webhook`, {
+    fetch(url, {
         method: 'GET',
         headers: {
             'X-API-Key': apiKey
         }
     })
     .then(response => {
-        console.log('📡 Respuesta del servidor:', response.status, response.statusText);
+        console.log('📡 Respuesta HTTP:', {
+            status: response.status,
+            statusText: response.statusText,
+            ok: response.ok,
+            headers: [...response.headers.entries()]
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
         return response.json();
     })
     .then(data => {
-        console.log('📦 Datos recibidos:', data);
+        console.log('📦 Datos JSON recibidos:', JSON.stringify(data, null, 2));
         
-        if (data.success && data.webhookUrl) {
-            // Crear el modal para editar (reutilizar el modal de creación)
-            createWebhookForSession(sessionId);
-            
-            // Esperar a que el modal se cree y luego rellenar con datos actuales
-            setTimeout(() => {
-                document.getElementById('webhookSessionId').value = sessionId;
-                document.getElementById('webhookUrl').value = data.webhookUrl;
+        if (data.success) {
+            if (data.webhookUrl) {
+                console.log('✅ Webhook encontrado, procediendo a editar...');
                 
-                // Marcar los eventos actuales
-                const events = data.events || [];
-                document.getElementById('eventMessage').checked = events.includes('message-received');
-                if (document.getElementById('eventDelivered')) {
-                    document.getElementById('eventDelivered').checked = events.includes('message-delivered');
-                }
-                if (document.getElementById('eventFromMe')) {
-                    document.getElementById('eventFromMe').checked = events.includes('message-from-me');
-                }
-                document.getElementById('eventQr').checked = events.includes('qr');
-            }, 100);
-            
+                // Crear el modal para editar (reutilizar el modal de creación)
+                createWebhookForSession(sessionId);
+                
+                // Esperar a que el modal se cree y luego rellenar con datos actuales
+                setTimeout(() => {
+                    console.log('⏰ Intentando rellenar el modal...');
+                    
+                    // Verificar que los elementos existen antes de usarlos
+                    const sessionSelect = document.getElementById('webhookSessionId');
+                    const urlInput = document.getElementById('webhookUrl');
+                    const eventMessage = document.getElementById('eventMessage');
+                    const eventDelivered = document.getElementById('eventDelivered');
+                    const eventFromMe = document.getElementById('eventFromMe');
+                    const eventQr = document.getElementById('eventQr');
+                    
+                    console.log('🔍 Elementos encontrados:', {
+                        sessionSelect: !!sessionSelect,
+                        urlInput: !!urlInput,
+                        eventMessage: !!eventMessage,
+                        eventDelivered: !!eventDelivered,
+                        eventFromMe: !!eventFromMe,
+                        eventQr: !!eventQr
+                    });
+                    
+                    if (sessionSelect && urlInput) {
+                        sessionSelect.value = sessionId;
+                        urlInput.value = data.webhookUrl;
+                        
+                        // Marcar los eventos actuales
+                        const events = data.events || [];
+                        console.log('📋 Eventos a marcar:', events);
+                        
+                        if (eventMessage) eventMessage.checked = events.includes('message-received');
+                        if (eventDelivered) eventDelivered.checked = events.includes('message-delivered');
+                        if (eventFromMe) eventFromMe.checked = events.includes('message-from-me');
+                        if (eventQr) eventQr.checked = events.includes('qr');
+                        
+                        console.log('✅ Modal rellenado exitosamente');
+                    } else {
+                        console.error('❌ No se encontraron los elementos del modal');
+                        showNotification('Error: No se pudo acceder al formulario', 'danger');
+                    }
+                }, 200); // Aumenté el timeout a 200ms
+                
+            } else {
+                console.log('⚠️ Respuesta exitosa pero sin webhookUrl');
+                showNotification('No hay webhook configurado para esta sesión', 'warning');
+            }
         } else {
-            console.log('⚠️ No hay webhook configurado o respuesta sin éxito:', data);
-            showNotification('No hay webhook configurado para esta sesión', 'warning');
+            console.log('❌ Respuesta no exitosa:', data);
+            showNotification(data.error || 'Error obteniendo webhook', 'danger');
         }
     })
     .catch(error => {
-        console.error('❌ Error obteniendo webhook:', error);
-        showNotification('Error obteniendo configuración del webhook', 'danger');
+        console.error('💥 Error completo:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
+        showNotification(`Error de conexión: ${error.message}`, 'danger');
     });
 }
 
