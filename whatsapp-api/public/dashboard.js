@@ -130,27 +130,38 @@ function initializeCharts() {
 // Load dashboard data
 async function loadDashboardData() {
     try {
+        console.log('🔄 Iniciando carga de datos del dashboard...');
         showLoading('Cargando datos del dashboard...', true);
         
         const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        console.log('🔑 API Key encontrada:', apiKey ? 'SÍ' : 'NO');
+        
         const response = await fetch(`${BASE_URL}/api/metrics/dashboard`, {
             headers: {
                 'X-API-Key': apiKey
             }
         });
 
+        console.log('📡 Respuesta del servidor:', response.status, response.statusText);
+
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('❌ Error HTTP:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
 
         const data = await response.json();
+        console.log('📊 Datos recibidos:', data);
+        
         if (data.success) {
+            console.log('✅ Dashboard data:', data.dashboard);
             updateDashboard(data.dashboard);
         } else {
+            console.error('❌ Error en respuesta:', data.error);
             throw new Error(data.error);
         }
     } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        console.error('💥 Error loading dashboard data:', error);
         showNotification('Error cargando datos del dashboard: ' + error.message, 'error');
     } finally {
         hideLoading();
@@ -159,11 +170,20 @@ async function loadDashboardData() {
 
 // Update dashboard with new data
 function updateDashboard(dashboard) {
+    console.log('🎯 Actualizando dashboard con datos:', dashboard);
+    
+    // Verificar estructura de datos
+    if (!dashboard || !dashboard.overview) {
+        console.error('❌ Estructura de datos incorrecta:', dashboard);
+        showNotification('Error: Datos del dashboard incompletos', 'error');
+        return;
+    }
+    
     // Update overview statistics
-    document.getElementById('totalSessions').textContent = dashboard.overview.totalSessions;
-    document.getElementById('activeSessions').textContent = dashboard.overview.activeSessions;
-    document.getElementById('totalMessages').textContent = dashboard.overview.totalMessages;
-    document.getElementById('systemUptime').textContent = dashboard.overview.uptime;
+    document.getElementById('totalSessions').textContent = dashboard.overview.totalSessions || 0;
+    document.getElementById('activeSessions').textContent = dashboard.overview.activeSessions || 0;
+    document.getElementById('totalMessages').textContent = dashboard.overview.totalMessages || 0;
+    document.getElementById('systemUptime').textContent = dashboard.overview.uptime || '0m';
 
     // Update system resources
     const memoryUsage = parseFloat(dashboard.resources.memoryUsage) || 0;

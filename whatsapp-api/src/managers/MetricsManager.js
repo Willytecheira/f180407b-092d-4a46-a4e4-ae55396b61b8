@@ -51,6 +51,12 @@ class MetricsManager {
   }
 
   startMetricsCollection() {
+    console.log('🚀 Iniciando recolección de métricas...');
+    
+    // Recopilar métricas iniciales inmediatamente
+    this.collectSystemMetrics();
+    this.collectSessionMetrics();
+    
     // Recopilar métricas del sistema cada 30 segundos
     setInterval(() => {
       this.collectSystemMetrics();
@@ -65,10 +71,13 @@ class MetricsManager {
     setInterval(() => {
       this.saveMetrics();
     }, 300000);
+    
+    console.log('✅ Métricas iniciales recopiladas');
   }
 
   collectSystemMetrics() {
     try {
+      console.log('📊 Recopilando métricas del sistema...');
       const memoryUsage = process.memoryUsage();
       const cpuUsage = process.cpuUsage();
       
@@ -102,6 +111,7 @@ class MetricsManager {
       };
 
       this.systemMetrics.push(metrics);
+      console.log('✅ Métricas recopiladas. Total entries:', this.systemMetrics.length);
       
       // Mantener solo las últimas 2880 entradas (24 horas de datos cada 30 segundos)
       if (this.systemMetrics.length > 2880) {
@@ -109,7 +119,7 @@ class MetricsManager {
       }
 
     } catch (error) {
-      console.error('Error recopilando métricas del sistema:', error);
+      console.error('❌ Error recopilando métricas del sistema:', error);
     }
   }
 

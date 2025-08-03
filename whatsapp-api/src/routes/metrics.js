@@ -118,19 +118,51 @@ module.exports = (metricsManager, sessionManager) => {
   // GET /api/metrics/dashboard - Resumen para dashboard
   router.get('/dashboard', (req, res) => {
     try {
+      console.log('🎯 Dashboard endpoint llamado');
+      
       const currentMetrics = metricsManager.getCurrentSystemMetrics();
+      console.log('📊 Current metrics:', currentMetrics);
+      
       const health = metricsManager.getHealthStatus();
+      console.log('💚 Health status:', health);
+      
       const sessions = sessionManager.getAllSessions();
+      console.log('📱 Sessions found:', sessions ? sessions.length : 0);
       
       // Calcular estadísticas rápidas
       const connectedSessions = sessions.filter(s => s.status === 'connected');
       const totalMessages = sessions.reduce((total, session) => {
         const messages = sessionManager.getSessionMessages(session.sessionId, 100);
-        return total + messages.length;
+        return total + (messages ? messages.length : 0);
       }, 0);
+      
+      console.log('📈 Stats calculated - Connected:', connectedSessions.length, 'Total msgs:', totalMessages);
 
       // Obtener métricas de las últimas 24 horas para trends
       const historical = metricsManager.getHistoricalMetrics(24);
+      console.log('📈 Historical data:', historical);
+      
+      // Generar datos de memoria en tiempo real si no hay históricos
+      const memoryTrends = historical?.data?.length > 0 
+        ? historical.data.slice(-24).map(d => ({
+            timestamp: d.timestamp,
+            usage: ((d.memory.used / d.memory.total) * 100).toFixed(2)
+          }))
+        : [{
+            timestamp: new Date().toISOString(),
+            usage: currentMetrics?.memory?.usage?.toFixed(2) || '0'
+          }];
+
+      // Generar datos de sesiones en tiempo real si no hay históricos  
+      const sessionTrends = historical?.data?.length > 0
+        ? historical.data.slice(-24).map(d => ({
+            timestamp: d.timestamp,
+            active: d.sessions?.active || 0
+          }))
+        : [{
+            timestamp: new Date().toISOString(),
+            active: connectedSessions.length
+          }];
       
       const dashboard = {
         overview: {
@@ -138,7 +170,7 @@ module.exports = (metricsManager, sessionManager) => {
           activeSessions: connectedSessions.length,
           totalMessages,
           uptime: currentMetrics?.uptime?.formatted || '0m',
-          systemStatus: health.status
+          systemStatus: health?.status || 'healthy'
         },
         resources: {
           memoryUsage: currentMetrics?.memory?.usage || 0,
@@ -154,17 +186,13 @@ module.exports = (metricsManager, sessionManager) => {
           hasQR: session.hasQR
         })),
         trends: {
-          memory: historical.data.slice(-24).map(d => ({
-            timestamp: d.timestamp,
-            usage: ((d.memory.used / d.memory.total) * 100).toFixed(2)
-          })),
-          sessions: historical.data.slice(-24).map(d => ({
-            timestamp: d.timestamp,
-            active: d.sessions.active
-          }))
+          memory: memoryTrends,
+          sessions: sessionTrends
         },
-        alerts: health.alerts || []
+        alerts: health?.alerts || []
       };
+      
+      console.log('📊 Final dashboard:', dashboard);
 
       res.json({
         success: true,
