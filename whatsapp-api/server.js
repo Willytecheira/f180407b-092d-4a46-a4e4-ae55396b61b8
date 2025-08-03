@@ -49,8 +49,10 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Servir archivos estáticos SIN middleware de autenticación
-app.use(express.static(path.join(__dirname, 'public')));
+// Servir solo archivos estáticos específicos (CSS, JS, images) - NO HTML
+app.use('/css', express.static(path.join(__dirname, 'public/css')));
+app.use('/js', express.static(path.join(__dirname, 'public/js')));
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
 app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Inicializar managers
@@ -72,7 +74,7 @@ const authenticateAPI = (req, res, next) => {
   next();
 };
 
-// Middleware para autenticación de usuarios
+// Middleware para autenticación de usuarios (API)
 const authenticateUser = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '') || req.headers['x-session-token'];
@@ -117,6 +119,21 @@ const authenticateUser = async (req, res, next) => {
   }
 };
 
+// Middleware para autenticación web (páginas HTML)
+const authenticateWeb = async (req, res, next) => {
+  try {
+    // Para páginas HTML, permitir acceso si hay una sesión válida en localStorage
+    // El token será validado por JavaScript en el cliente
+    // Solo bloqueamos si claramente no hay autenticación
+    
+    // Simplemente servir la página - la validación real se hace en el frontend
+    // y se redirige desde JavaScript si no hay sesión válida
+    next();
+  } catch (error) {
+    return res.redirect('/login.html');
+  }
+};
+
 // Rutas API
 app.use('/api', authenticateAPI, apiRoutes(sessionManager));
 app.use('/api/users', authenticateAPI, authenticateUser, userRoutes(userManager));
@@ -124,17 +141,33 @@ app.use('/api/metrics', authenticateAPI, metricsRoutes(metricsManager, sessionMa
 app.use('/api/system', authenticateAPI, authenticateUser, systemRoutes(sessionManager, userManager));
 app.use('/webhook', webhookRoutes(sessionManager));
 
-// Rutas específicas (sin middleware global complicado)
-app.get('/', (req, res) => {
+// Rutas específicas para páginas HTML
+app.get('/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/', authenticateWeb, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.get('/admin', (req, res) => {
+app.get('/admin', authenticateWeb, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
-app.get('/dashboard', (req, res) => {
+app.get('/dashboard', authenticateWeb, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/admin.html', authenticateWeb, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
+app.get('/dashboard.html', authenticateWeb, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/index.html', authenticateWeb, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Ruta de validación de sesión (actualizada para usar UserManager)

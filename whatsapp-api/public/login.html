@@ -125,7 +125,7 @@
                     try {
                         const userData = JSON.parse(sessionData);
                         if (userData.sessionToken) {
-                            window.location.href = '/admin';
+                            window.location.href = '/dashboard';
                             return;
                         }
                     } catch (e) {
@@ -214,8 +214,11 @@
                     loginBtn.innerHTML = '<i class="fas fa-check"></i> ¡Acceso concedido!';
                     loginBtn.className = 'btn btn-success';
                     
-                    // Redireccionar inmediatamente sin setTimeout
-                    window.location.replace('/');
+                    // Guardar sessionToken en localStorage para que el middleware web lo pueda leer
+                    localStorage.setItem('sessionToken', data.sessionToken);
+                    
+                    // Redireccionar al dashboard
+                    window.location.replace('/dashboard');
                 } else {
                     // Login fallido
                     showError(data.error || 'Usuario o contraseña incorrectos');

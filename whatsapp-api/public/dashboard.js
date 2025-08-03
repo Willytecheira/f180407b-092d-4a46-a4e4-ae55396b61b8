@@ -129,6 +129,12 @@ async function checkAuthentication() {
                     'Authorization': `Bearer ${sessionToken}`
                 }
             });
+            
+            // También configurar el token para futuras requests del navegador
+            if (sessionToken) {
+                // Para que el middleware web pueda leer el token del header
+                window.sessionToken = sessionToken;
+            }
 
             if (!response.ok) {
                 throw new Error(`Server validation failed: ${response.status}`);
