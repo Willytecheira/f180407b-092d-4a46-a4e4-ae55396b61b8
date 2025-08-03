@@ -1793,43 +1793,43 @@ function editWebhook(sessionId) {
             // Wait for modal to be fully rendered
             setTimeout(function() {
                 console.log('⏰ Intentando rellenar el modal...');
+                
+                // Verificar que los elementos existen antes de usarlos
+                const sessionSelect = document.getElementById('editWebhookSessionId');
+                const urlInput = document.getElementById('editWebhookUrl');
+                const eventMessage = document.getElementById('editEventMessage');
+                const eventDelivered = document.getElementById('editEventDelivered');
+                const eventFromMe = document.getElementById('editEventFromMe');
+                const eventQr = document.getElementById('editEventQr');
+                
+                console.log('🔍 Elementos encontrados:', {
+                    sessionSelect: !!sessionSelect,
+                    urlInput: !!urlInput,
+                    eventMessage: !!eventMessage,
+                    eventDelivered: !!eventDelivered,
+                    eventFromMe: !!eventFromMe,
+                    eventQr: !!eventQr
+                });
+                
+                if (sessionSelect && urlInput) {
+                    sessionSelect.value = sessionId;
+                    urlInput.value = data.webhookUrl;
                     
-                    // Verificar que los elementos existen antes de usarlos
-                    const sessionSelect = document.getElementById('webhookSessionId');
-                    const urlInput = document.getElementById('webhookUrl');
-                    const eventMessage = document.getElementById('eventMessage');
-                    const eventDelivered = document.getElementById('eventDelivered');
-                    const eventFromMe = document.getElementById('eventFromMe');
-                    const eventQr = document.getElementById('eventQr');
+                    // Marcar los eventos actuales
+                    const events = data.events || [];
+                    console.log('📋 Eventos a marcar:', events);
                     
-                    console.log('🔍 Elementos encontrados:', {
-                        sessionSelect: !!sessionSelect,
-                        urlInput: !!urlInput,
-                        eventMessage: !!eventMessage,
-                        eventDelivered: !!eventDelivered,
-                        eventFromMe: !!eventFromMe,
-                        eventQr: !!eventQr
-                    });
+                    if (eventMessage) eventMessage.checked = events.includes('message-received');
+                    if (eventDelivered) eventDelivered.checked = events.includes('message-delivered');
+                    if (eventFromMe) eventFromMe.checked = events.includes('message-from-me');
+                    if (eventQr) eventQr.checked = events.includes('qr');
                     
-                    if (sessionSelect && urlInput) {
-                        sessionSelect.value = sessionId;
-                        urlInput.value = data.webhookUrl;
-                        
-                        // Marcar los eventos actuales
-                        const events = data.events || [];
-                        console.log('📋 Eventos a marcar:', events);
-                        
-                        if (eventMessage) eventMessage.checked = events.includes('message-received');
-                        if (eventDelivered) eventDelivered.checked = events.includes('message-delivered');
-                        if (eventFromMe) eventFromMe.checked = events.includes('message-from-me');
-                        if (eventQr) eventQr.checked = events.includes('qr');
-                        
-                        console.log('✅ Modal rellenado exitosamente');
-                    } else {
-                        console.error('❌ No se encontraron los elementos del modal');
-                        showNotification('Error: No se pudo acceder al formulario', 'danger');
-                    }
-                }, 200); // Aumenté el timeout a 200ms
+                    console.log('✅ Modal rellenado exitosamente');
+                } else {
+                    console.error('❌ No se encontraron los elementos del modal');
+                    showNotification('Error: No se pudo acceder al formulario', 'danger');
+                }
+            }, 200);
                 
             } else {
                 console.log('⚠️ Respuesta exitosa pero sin webhookUrl');

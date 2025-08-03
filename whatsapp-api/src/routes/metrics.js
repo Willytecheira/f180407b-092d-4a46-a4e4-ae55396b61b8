@@ -117,22 +117,10 @@ module.exports = (metricsManager, sessionManager) => {
 
   // GET /api/metrics/dashboard - Resumen para dashboard
   router.get('/dashboard', (req, res) => {
-    try {
-      console.log('🎯 Dashboard endpoint llamado');
-      
-      // Ensure managers are initialized
-      if (!metricsManager || !sessionManager) {
-        throw new Error('Managers not initialized');
-      }
-      
+  try {
       const currentMetrics = metricsManager.getCurrentSystemMetrics();
-      console.log('📊 Current metrics:', currentMetrics);
-      
       const health = metricsManager.getHealthStatus();
-      console.log('💚 Health status:', health);
-      
       const sessions = sessionManager.getAllSessions() || [];
-      console.log('📱 Sessions found:', sessions.length);
       
       // Calcular estadísticas rápidas
       const connectedSessions = sessions.filter(s => s.status === 'connected');
