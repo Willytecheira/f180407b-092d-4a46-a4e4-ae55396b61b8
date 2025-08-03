@@ -16,6 +16,9 @@ class SessionManager {
     
     // Crear directorios necesarios y cargar datos
     this.initializeStorage();
+    
+    // Restaurar sesiones existentes al iniciar
+    this.restoreExistingSessions();
   }
   
   async initializeStorage() {
@@ -748,6 +751,91 @@ class SessionManager {
     if (mimetype.startsWith('text/')) return 'document';
     
     return 'document';
+  }
+
+  async restoreExistingSessions() {
+    try {
+      console.log('🔄 Buscando sesiones existentes para restaurar...');
+      
+      const authPath = './.wwebjs_auth';
+      
+      // Verificar si existe el directorio de autenticación
+      if (!await fs.pathExists(authPath)) {
+        console.log('📁 No se encontraron sesiones previas');
+        return;
+      }
+      
+      // Leer directorios de sesiones
+      const sessionDirs = await fs.readdir(authPath);
+      const sessionIds = sessionDirs
+        .filter(dir => dir.startsWith('session-'))
+        .map(dir => dir.replace('session-', ''));
+      
+      if (sessionIds.length === 0) {
+        console.log('📁 No se encontraron sesiones previas');
+        return;
+      }
+      
+      console.log(`🔍 Encontradas ${sessionIds.length} sesiones para restaurar:`, sessionIds);
+      
+      // Restaurar cada sesión
+      for (const sessionId of sessionIds) {
+        try {
+          console.log(`🔧 Restaurando sesión: ${sessionId}`);
+          
+          const client = new Client({
+            authStrategy: new LocalAuth({
+              clientId: sessionId
+            }),
+            puppeteer: {
+              headless: true,
+              args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--single-process',
+                '--disable-gpu'
+              ]
+            }
+          });
+
+          // Configurar eventos del cliente
+          this.setupClientEvents(client, sessionId);
+
+          // Guardar cliente
+          this.sessions.set(sessionId, {
+            client,
+            status: 'initializing',
+            qr: null,
+            connectedAt: null
+          });
+
+          // Inicializar mensajes para esta sesión
+          if (!this.messages.has(sessionId)) {
+            this.messages.set(sessionId, []);
+          }
+
+          // Inicializar cliente (sin await para no bloquear)
+          client.initialize().catch(error => {
+            console.error(`❌ Error restaurando sesión ${sessionId}:`, error);
+            this.sessions.delete(sessionId);
+          });
+          
+          console.log(`✅ Sesión ${sessionId} agregada para restauración`);
+          
+        } catch (error) {
+          console.error(`❌ Error procesando sesión ${sessionId}:`, error);
+        }
+      }
+      
+      console.log(`🚀 Proceso de restauración iniciado para ${sessionIds.length} sesiones`);
+      
+    } catch (error) {
+      console.error('❌ Error en proceso de restauración:', error);
+    }
   }
 }
 

@@ -916,7 +916,7 @@ function displayWebhooksManagement(webhooks) {
                         </p>
                         <div class="d-flex gap-2">
                             ${!isGlobal ? `
-                                <button class="btn btn-sm btn-outline-primary" onclick="editWebhook('${webhook.sessionId}')">
+                                <button class="btn btn-sm btn-outline-primary" onclick="console.log('Botón editar clickeado para:', '${webhook.sessionId}'); editWebhook('${webhook.sessionId}')">
                                     <i class="fas fa-edit me-1"></i>Editar
                                 </button>
                                 <button class="btn btn-sm btn-outline-danger" onclick="deleteWebhook('${webhook.sessionId}')">
