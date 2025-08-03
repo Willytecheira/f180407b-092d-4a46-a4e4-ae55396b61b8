@@ -22,7 +22,7 @@ if [ ! -d ".git" ]; then
     
     # Inicializar Git si no existe
     git init
-    git remote add origin https://github.com/Willytecheira/f180407b-092d-4a46-a4e4-ae55396b61b8.git
+    git remote add origin https://github.com/Willytecheira/f180407b-092d-4a46-a4e4-ae55396b61b8.git 2>/dev/null || git remote set-url origin https://github.com/Willytecheira/f180407b-092d-4a46-a4e4-ae55396b61b8.git
     
     # Configurar usuario si no está configurado
     if [ -z "$(git config user.name)" ]; then
