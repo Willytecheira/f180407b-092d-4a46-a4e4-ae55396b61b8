@@ -1527,52 +1527,12 @@ function viewSession(sessionId) {
                                 
                                 <!-- Configuración Webhook -->
                                 <div class="tab-pane fade" id="webhook" role="tabpanel">
-                                    ${webhook.webhookUrl ? `
-                                        <div class="alert alert-success">
-                                            <h6><i class="fas fa-check-circle me-2"></i>Webhook Configurado</h6>
-                                            <p class="mb-2"><strong>URL:</strong> ${webhook.webhookUrl}</p>
-                                            <p class="mb-0"><strong>Eventos:</strong> ${webhook.events?.join(', ') || 'Todos'}</p>
-                                        </div>
-                                        <button class="btn btn-outline-primary btn-sm" onclick="editWebhook('${sessionId}')">
-                                            <i class="fas fa-edit me-1"></i>Editar Webhook
-                                        </button>
-                                    ` : `
-                                        <div class="alert alert-warning">
-                                            <h6><i class="fas fa-exclamation-triangle me-2"></i>Sin Webhook</h6>
-                                            <p class="mb-0">No hay webhook configurado para esta sesión</p>
-                                        </div>
-                                        <button class="btn btn-primary btn-sm" onclick="createWebhook(); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
-                                            <i class="fas fa-plus me-1"></i>Configurar Webhook
-                                        </button>
-                                    `}
+                                    <div id="webhookContent"></div>
                                 </div>
                                 
                                 <!-- Acciones -->
                                 <div class="tab-pane fade" id="actions" role="tabpanel">
-                                    <div class="d-grid gap-2">
-                                        ${!session.connected ? `
-                                            <button class="btn btn-success" onclick="reconnectSession('${sessionId}')">
-                                                <i class="fas fa-sync me-2"></i>Reconectar Sesión
-                                            </button>
-                                        ` : ''}
-                                        
-                                        <button class="btn btn-info" onclick="getSessionQR('${sessionId}')">
-                                            <i class="fas fa-qrcode me-2"></i>Obtener Código QR
-                                        </button>
-                                        
-                                        <button class="btn btn-warning" onclick="restartSession('${sessionId}')">
-                                            <i class="fas fa-redo me-2"></i>Reiniciar Sesión
-                                        </button>
-                                        
-                                        <hr>
-                                        
-                                         <button class="btn btn-warning" onclick="logoutSession('${sessionId}')">
-                                             <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión WhatsApp
-                                         </button>
-                                         
-                                         <button class="btn btn-danger" onclick="deleteSession('${sessionId}'); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
-                                             <i class="fas fa-trash me-2"></i>Eliminar Sesión
-                                         </button>
+                                    <div class="d-grid gap-2" id="actionsContent">
                                     </div>
                                 </div>
                             </div>
@@ -1588,6 +1548,67 @@ function viewSession(sessionId) {
         document.body.insertAdjacentHTML('beforeend', modal);
         const modalElement = new bootstrap.Modal(document.getElementById('viewSessionModal'));
         modalElement.show();
+        
+        // Populate webhook content after modal is rendered
+        setTimeout(() => {
+            const webhookContent = document.getElementById('webhookContent');
+            if (webhookContent) {
+                if (webhook.webhookUrl) {
+                    webhookContent.innerHTML = `
+                        <div class="alert alert-success">
+                            <h6><i class="fas fa-check-circle me-2"></i>Webhook Configurado</h6>
+                            <p class="mb-2"><strong>URL:</strong> ${webhook.webhookUrl}</p>
+                            <p class="mb-0"><strong>Eventos:</strong> ${webhook.events?.join(', ') || 'Todos'}</p>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="editWebhook('${sessionId}')">
+                            <i class="fas fa-edit me-1"></i>Editar Webhook
+                        </button>
+                    `;
+                } else {
+                    webhookContent.innerHTML = `
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle me-2"></i>Sin Webhook</h6>
+                            <p class="mb-0">No hay webhook configurado para esta sesión</p>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="createWebhook(); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
+                            <i class="fas fa-plus me-1"></i>Configurar Webhook
+                        </button>
+                    `;
+                }
+            }
+            
+            const actionsContent = document.getElementById('actionsContent');
+            if (actionsContent) {
+                let actionsHTML = '';
+                if (!session.connected) {
+                    actionsHTML += `
+                        <button class="btn btn-success" onclick="reconnectSession('${sessionId}')">
+                            <i class="fas fa-sync me-2"></i>Reconectar Sesión
+                        </button>
+                    `;
+                }
+                actionsHTML += `
+                    <button class="btn btn-info" onclick="getSessionQR('${sessionId}')">
+                        <i class="fas fa-qrcode me-2"></i>Obtener Código QR
+                    </button>
+                    
+                    <button class="btn btn-warning" onclick="restartSession('${sessionId}')">
+                        <i class="fas fa-redo me-2"></i>Reiniciar Sesión
+                    </button>
+                    
+                    <hr>
+                    
+                    <button class="btn btn-warning" onclick="logoutSession('${sessionId}')">
+                        <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión WhatsApp
+                    </button>
+                    
+                    <button class="btn btn-danger" onclick="deleteSession('${sessionId}'); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
+                        <i class="fas fa-trash me-2"></i>Eliminar Sesión
+                    </button>
+                `;
+                actionsContent.innerHTML = actionsHTML;
+            }
+        }, 100);
         
         // Cargar mensajes recientes cuando se seleccione la pestaña
         document.getElementById('messages-tab').addEventListener('click', function() {
@@ -2016,29 +2037,25 @@ function editWebhook(sessionId) {
                                     <div class="mb-3">
                                         <label class="form-label">Eventos</label>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" value="message-received" 
-                                                   id="editEventMessage" ${(data.events && (data.events.includes('message-received') || data.events.includes('all'))) ? 'checked' : ''}>
+                                            <input class="form-check-input" type="checkbox" value="message-received" id="editEventMessage">
                                             <label class="form-check-label" for="editEventMessage">
                                                 Mensajes recibidos
                                             </label>
                                         </div>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" value="message-delivered" 
-                                                   id="editEventDelivered" ${(data.events && (data.events.includes('message-delivered') || data.events.includes('all'))) ? 'checked' : ''}>
+                                            <input class="form-check-input" type="checkbox" value="message-delivered" id="editEventDelivered">
                                             <label class="form-check-label" for="editEventDelivered">
                                                 Mensajes entregados
                                             </label>
                                         </div>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" value="message-from-me" 
-                                                   id="editEventFromMe" ${(data.events && (data.events.includes('message-from-me') || data.events.includes('all'))) ? 'checked' : ''}>
+                                            <input class="form-check-input" type="checkbox" value="message-from-me" id="editEventFromMe">
                                             <label class="form-check-label" for="editEventFromMe">
                                                 Mensajes enviados por mí
                                             </label>
                                         </div>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" value="qr" 
-                                                   id="editEventQr" ${(data.events && (data.events.includes('qr') || data.events.includes('all'))) ? 'checked' : ''}>
+                                            <input class="form-check-input" type="checkbox" value="qr" id="editEventQr">
                                             <label class="form-check-label" for="editEventQr">
                                                 Código QR
                                             </label>
@@ -2093,10 +2110,10 @@ function editWebhook(sessionId) {
                     const events = data.events || [];
                     console.log('📋 Eventos a marcar:', events);
                     
-                    if (eventMessage) eventMessage.checked = events.includes('message-received');
-                    if (eventDelivered) eventDelivered.checked = events.includes('message-delivered');
-                    if (eventFromMe) eventFromMe.checked = events.includes('message-from-me');
-                    if (eventQr) eventQr.checked = events.includes('qr');
+                    if (eventMessage) eventMessage.checked = events.includes('message-received') || events.includes('all');
+                    if (eventDelivered) eventDelivered.checked = events.includes('message-delivered') || events.includes('all');
+                    if (eventFromMe) eventFromMe.checked = events.includes('message-from-me') || events.includes('all');
+                    if (eventQr) eventQr.checked = events.includes('qr') || events.includes('all');
                     
                     console.log('✅ Modal rellenado exitosamente');
                 } else {
