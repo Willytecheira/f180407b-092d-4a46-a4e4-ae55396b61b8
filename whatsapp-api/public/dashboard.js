@@ -1789,7 +1789,10 @@ function editWebhook(sessionId) {
             document.getElementById('editWebhookModal').addEventListener('hidden.bs.modal', function () {
                 this.remove();
             });
-                    console.log('⏰ Intentando rellenar el modal...');
+            
+            // Wait for modal to be fully rendered
+            setTimeout(function() {
+                console.log('⏰ Intentando rellenar el modal...');
                     
                     // Verificar que los elementos existen antes de usarlos
                     const sessionSelect = document.getElementById('webhookSessionId');

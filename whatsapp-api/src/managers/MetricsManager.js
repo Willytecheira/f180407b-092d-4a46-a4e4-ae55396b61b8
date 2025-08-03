@@ -12,7 +12,13 @@ class MetricsManager {
     this.startTime = Date.now();
     
     this.initializeStorage();
-    this.startMetricsCollection();
+    
+    // Collect initial metrics immediately after a brief delay
+    setTimeout(() => {
+      this.collectSystemMetrics();
+      this.collectSessionMetrics();
+      this.startMetricsCollection();
+    }, 2000);
   }
 
   async initializeStorage() {
