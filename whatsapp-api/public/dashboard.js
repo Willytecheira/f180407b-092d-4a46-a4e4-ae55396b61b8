@@ -77,56 +77,74 @@ function setupNavigation() {
 
 // Authentication check
 async function checkAuthentication() {
+    console.log('🔐 Verificando autenticación...');
+    
     const sessionToken = localStorage.getItem('sessionToken');
     const sessionData = localStorage.getItem('whatsapp_api_session');
     
+    // Si no hay ningún dato de sesión, redirigir al login
     if (!sessionToken && !sessionData) {
         console.log('❌ No session data found, redirecting to login');
         window.location.href = '/login.html';
         return;
     }
 
+    // Si no hay sessionToken pero sí sessionData, también redirigir (sesión inválida)
+    if (!sessionToken && sessionData) {
+        console.log('❌ No session token found, clearing session data and redirecting to login');
+        localStorage.removeItem('whatsapp_api_session');
+        window.location.href = '/login.html';
+        return;
+    }
+
+    // Si no hay sessionData pero sí sessionToken, también redirigir (sesión inválida)
+    if (sessionToken && !sessionData) {
+        console.log('❌ No session data found, clearing token and redirecting to login');
+        localStorage.removeItem('sessionToken');
+        window.location.href = '/login.html';
+        return;
+    }
+
     try {
-        if (sessionData) {
-            const data = JSON.parse(sessionData);
-            const loginTime = new Date(data.loginTime);
-            const now = new Date();
-            const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
+        const data = JSON.parse(sessionData);
+        const loginTime = new Date(data.loginTime);
+        const now = new Date();
+        const hoursDiff = (now - loginTime) / (1000 * 60 * 60);
 
-            if (hoursDiff > 24) {
-                console.log('❌ Session expired, redirecting to login');
-                localStorage.removeItem('whatsapp_api_session');
-                localStorage.removeItem('sessionToken');
-                window.location.href = '/login.html';
-                return;
-            }
+        // Verificar si la sesión ha expirado (24 horas)
+        if (hoursDiff > 24) {
+            console.log('❌ Session expired, redirecting to login');
+            localStorage.removeItem('whatsapp_api_session');
+            localStorage.removeItem('sessionToken');
+            window.location.href = '/login.html';
+            return;
+        }
 
-            // Validate session with server
-            try {
-                const response = await fetch(`${BASE_URL}/api/metrics/system`, {
-                    headers: {
-                        'x-api-key': API_KEY,
-                        'x-session-token': sessionToken,
-                        'Authorization': `Bearer ${sessionToken}`
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error(`Server validation failed: ${response.status}`);
+        // Validar sesión con el servidor
+        try {
+            const response = await fetch(`${BASE_URL}/api/metrics/system`, {
+                headers: {
+                    'x-api-key': API_KEY,
+                    'x-session-token': sessionToken,
+                    'Authorization': `Bearer ${sessionToken}`
                 }
+            });
 
-                console.log('✅ Session validated with server');
-                document.getElementById('currentUser').textContent = data.username;
-                
-                // Store API key for future requests
-                localStorage.setItem('apiKey', API_KEY);
-            } catch (serverError) {
-                console.error('❌ Server session validation failed:', serverError);
-                localStorage.removeItem('whatsapp_api_session');
-                localStorage.removeItem('sessionToken');
-                window.location.href = '/login.html';
-                return;
+            if (!response.ok) {
+                throw new Error(`Server validation failed: ${response.status}`);
             }
+
+            console.log('✅ Session validated with server');
+            document.getElementById('currentUser').textContent = data.username;
+            
+            // Store API key for future requests
+            localStorage.setItem('apiKey', API_KEY);
+        } catch (serverError) {
+            console.error('❌ Server session validation failed:', serverError);
+            localStorage.removeItem('whatsapp_api_session');
+            localStorage.removeItem('sessionToken');
+            window.location.href = '/login.html';
+            return;
         }
     } catch (error) {
         console.error('❌ Error checking authentication:', error);
