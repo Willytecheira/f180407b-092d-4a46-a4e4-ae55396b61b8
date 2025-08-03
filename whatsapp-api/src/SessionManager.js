@@ -185,19 +185,57 @@ class SessionManager {
 
     // Cambio de estado de mensaje
     client.on('message_ack', async (message, ack) => {
-      const ackData = {
-        sessionId,
-        messageId: message.id._serialized,
-        ack,
-        ackStatus: this.getAckStatusText(ack),
-        timestamp: new Date().toISOString()
-      };
+      try {
+        // Obtener información del mensaje y contacto
+        const contact = await message.getContact().catch(() => null);
+        const isFromMe = message.fromMe;
+        
+        const ackData = {
+          sessionId,
+          messageId: message.id._serialized,
+          from: message.from,
+          to: message.to,
+          body: message.body,
+          type: message.type,
+          ack,
+          ackStatus: this.getAckStatusText(ack),
+          timestamp: new Date().toISOString(),
+          isFromMe,
+          contact: contact ? {
+            name: contact.name || contact.pushname || contact.number,
+            number: contact.number,
+            isGroup: contact.isGroup
+          } : null
+        };
 
-      // Emitir via WebSocket
-      this.io.to(`session-${sessionId}`).emit('message_ack', ackData);
+        // Emitir via WebSocket
+        this.io.to(`session-${sessionId}`).emit('message_ack', ackData);
 
-      // Enviar a webhook si está configurado
-      await this.sendToWebhook(sessionId, ackData, 'message_ack');
+        // Determinar el tipo de evento para webhook basado en ACK y origen
+        let eventType = 'message_ack';
+        
+        if (isFromMe) {
+          // Mensajes enviados por nosotros
+          if (ack === 1) {
+            eventType = 'message-delivered';
+          } else if (ack === 3) {
+            eventType = 'message-read';
+          }
+        } else {
+          // Mensajes recibidos de otros
+          if (ack === 1) {
+            eventType = 'message-delivered';
+          } else if (ack === 3) {
+            eventType = 'message-read';
+          }
+        }
+
+        // Enviar a webhook si está configurado
+        await this.sendToWebhook(sessionId, ackData, eventType);
+        
+      } catch (error) {
+        console.error(`Error procesando message_ack para ${sessionId}:`, error);
+      }
     });
   }
 
@@ -381,6 +419,38 @@ class SessionManager {
 
       console.log(`📤 Mensaje enviado desde ${sessionId} a ${number}`);
 
+      // Generar webhook para mensaje enviado
+      try {
+        const messageData = {
+          id: sentMessage.id._serialized,
+          from: sentMessage.from,
+          to: sentMessage.to,
+          body: message,
+          type: 'chat',
+          timestamp: sentMessage.timestamp,
+          isFromMe: true,
+          sessionId
+        };
+
+        // Obtener información del contacto si es posible
+        try {
+          const contact = await sentMessage.getContact();
+          messageData.contact = {
+            name: contact.name || contact.pushname || contact.number,
+            number: contact.number,
+            isGroup: contact.isGroup
+          };
+        } catch (contactError) {
+          console.log(`No se pudo obtener contacto para mensaje enviado: ${contactError.message}`);
+        }
+
+        // Enviar webhook de mensaje enviado
+        await this.sendToWebhook(sessionId, messageData, 'message-from-me');
+      } catch (webhookError) {
+        console.error(`Error enviando webhook para mensaje enviado:`, webhookError);
+        // No detener el flujo principal por errores de webhook
+      }
+
       return {
         success: true,
         messageId: sentMessage.id._serialized,
@@ -428,6 +498,44 @@ class SessionManager {
       });
 
       console.log(`📤 Media enviado desde ${sessionId} a ${number}`);
+
+      // Generar webhook para media enviado
+      try {
+        const messageData = {
+          id: sentMessage.id._serialized,
+          from: sentMessage.from,
+          to: sentMessage.to,
+          body: options.caption || '',
+          type: this.getMediaTypeFromMimetype(options.mimetype || mediaMessage.mimetype),
+          timestamp: sentMessage.timestamp,
+          isFromMe: true,
+          isMedia: true,
+          sessionId,
+          media: {
+            mimetype: options.mimetype || mediaMessage.mimetype,
+            filename: options.filename || mediaMessage.filename || 'media',
+            caption: options.caption
+          }
+        };
+
+        // Obtener información del contacto si es posible
+        try {
+          const contact = await sentMessage.getContact();
+          messageData.contact = {
+            name: contact.name || contact.pushname || contact.number,
+            number: contact.number,
+            isGroup: contact.isGroup
+          };
+        } catch (contactError) {
+          console.log(`No se pudo obtener contacto para media enviado: ${contactError.message}`);
+        }
+
+        // Enviar webhook de media enviado
+        await this.sendToWebhook(sessionId, messageData, 'message-from-me');
+      } catch (webhookError) {
+        console.error(`Error enviando webhook para media enviado:`, webhookError);
+        // No detener el flujo principal por errores de webhook
+      }
 
       return {
         success: true,
@@ -611,9 +719,15 @@ class SessionManager {
       'image/webp': '.webp',
       'video/mp4': '.mp4',
       'video/webm': '.webm',
+      'video/avi': '.avi',
+      'video/mov': '.mov',
       'audio/mpeg': '.mp3',
       'audio/ogg': '.ogg',
       'audio/wav': '.wav',
+      'audio/aac': '.aac',
+      'audio/m4a': '.m4a',
+      'audio/opus': '.opus',
+      'audio/webm': '.webm',
       'application/pdf': '.pdf',
       'application/msword': '.doc',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
@@ -621,6 +735,19 @@ class SessionManager {
     };
     
     return extensions[mimetype] || '.bin';
+  }
+
+  getMediaTypeFromMimetype(mimetype) {
+    if (!mimetype) return 'unknown';
+    
+    if (mimetype.startsWith('image/')) return 'image';
+    if (mimetype.startsWith('video/')) return 'video';
+    if (mimetype.startsWith('audio/')) return 'ptt'; // WhatsApp Web.js usa 'ptt' para audio
+    if (mimetype.startsWith('application/pdf')) return 'document';
+    if (mimetype.startsWith('application/')) return 'document';
+    if (mimetype.startsWith('text/')) return 'document';
+    
+    return 'document';
   }
 }
 
