@@ -2017,28 +2017,28 @@ function editWebhook(sessionId) {
                                         <label class="form-label">Eventos</label>
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" value="message-received" 
-                                                   id="editEventMessage" ${data.events?.includes('message-received') || data.events?.includes('all') ? 'checked' : ''}>
+                                                   id="editEventMessage" ${(data.events && (data.events.includes('message-received') || data.events.includes('all'))) ? 'checked' : ''}>
                                             <label class="form-check-label" for="editEventMessage">
                                                 Mensajes recibidos
                                             </label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" value="message-delivered" 
-                                                   id="editEventDelivered" ${data.events?.includes('message-delivered') || data.events?.includes('all') ? 'checked' : ''}>
+                                                   id="editEventDelivered" ${(data.events && (data.events.includes('message-delivered') || data.events.includes('all'))) ? 'checked' : ''}>
                                             <label class="form-check-label" for="editEventDelivered">
                                                 Mensajes entregados
                                             </label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" value="message-from-me" 
-                                                   id="editEventFromMe" ${data.events?.includes('message-from-me') || data.events?.includes('all') ? 'checked' : ''}>
+                                                   id="editEventFromMe" ${(data.events && (data.events.includes('message-from-me') || data.events.includes('all'))) ? 'checked' : ''}>
                                             <label class="form-check-label" for="editEventFromMe">
                                                 Mensajes enviados por mí
                                             </label>
                                         </div>
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" value="qr" 
-                                                   id="editEventQr" ${data.events?.includes('qr') || data.events?.includes('all') ? 'checked' : ''}>
+                                                   id="editEventQr" ${(data.events && (data.events.includes('qr') || data.events.includes('all'))) ? 'checked' : ''}>
                                             <label class="form-check-label" for="editEventQr">
                                                 Código QR
                                             </label>
