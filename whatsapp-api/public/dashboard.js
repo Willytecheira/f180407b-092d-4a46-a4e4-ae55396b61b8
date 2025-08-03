@@ -158,13 +158,77 @@ async function loadDashboardData() {
             updateDashboard(data.data);
         } else {
             console.error('❌ Error en respuesta:', data.error);
-            throw new Error(data.error);
+            // Try fallback data loading
+            loadBasicMetrics();
         }
     } catch (error) {
         console.error('💥 Error loading dashboard data:', error);
         showNotification('Error cargando datos del dashboard: ' + error.message, 'error');
+        // Try fallback data loading
+        loadBasicMetrics();
     } finally {
         hideLoading();
+    }
+}
+
+// Fallback function to load basic metrics when dashboard fails
+async function loadBasicMetrics() {
+    try {
+        console.log('🔄 Loading fallback metrics...');
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        
+        // Load system metrics
+        const systemResponse = await fetch(`${BASE_URL}/api/metrics/system`, {
+            headers: { 'x-api-key': apiKey }
+        });
+        
+        if (systemResponse.ok) {
+            const systemData = await systemResponse.json();
+            if (systemData.success && systemData.data) {
+                document.getElementById('systemUptime').textContent = formatUptime(systemData.data.uptime || 0);
+                document.getElementById('memoryUsage').textContent = Math.round(systemData.data.memoryUsage || 0) + '%';
+                document.getElementById('cpuCores').textContent = systemData.data.cpuCores || 0;
+                document.getElementById('loadAverage').textContent = (systemData.data.loadAverage?.[0] || 0).toFixed(2);
+                
+                // Update progress bars
+                const memoryProgress = document.getElementById('memoryProgress');
+                const heapProgress = document.getElementById('heapProgress');
+                if (memoryProgress) memoryProgress.style.width = Math.round(systemData.data.memoryUsage || 0) + '%';
+                if (heapProgress) heapProgress.style.width = Math.round(systemData.data.heapUsage || 0) + '%';
+            }
+        }
+        
+        // Load sessions
+        const sessionsResponse = await fetch(`${BASE_URL}/api/sessions`, {
+            headers: { 'x-api-key': apiKey }
+        });
+        
+        if (sessionsResponse.ok) {
+            const sessionsData = await sessionsResponse.json();
+            if (sessionsData.success && sessionsData.sessions) {
+                const sessions = sessionsData.sessions;
+                const activeSessions = sessions.filter(s => s.connected).length;
+                
+                document.getElementById('totalSessions').textContent = sessions.length;
+                document.getElementById('activeSessions').textContent = activeSessions;
+                
+                // Calculate total messages
+                const totalMessages = sessions.reduce((sum, s) => sum + (s.messageCount || 0), 0);
+                document.getElementById('totalMessages').textContent = totalMessages;
+                
+                // Update sessions list
+                updateSessionsList(sessions.slice(0, 5)); // Show only first 5
+            }
+        }
+        
+        console.log('✅ Fallback metrics loaded');
+    } catch (error) {
+        console.error('💥 Error loading fallback metrics:', error);
+        // Set zeros as last resort
+        document.getElementById('totalSessions').textContent = '0';
+        document.getElementById('activeSessions').textContent = '0';
+        document.getElementById('totalMessages').textContent = '0';
+        document.getElementById('systemUptime').textContent = '0m';
     }
 }
 
@@ -354,6 +418,22 @@ function formatDate(dateString) {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
 
+function formatUptime(seconds) {
+    if (!seconds || seconds < 0) return '0m';
+    
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${secs}s`;
+    } else {
+        return `${secs}s`;
+    }
+}
+
 function showLoading(message = 'Cargando...', show = true) {
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
@@ -403,6 +483,41 @@ function logout() {
     localStorage.removeItem('sessionToken');
     localStorage.removeItem('apiKey');
     window.location.href = '/login.html';
+}
+
+// Cerrar sesión de WhatsApp (no confundir con logout del dashboard)
+async function logoutSession(sessionId) {
+    if (!confirm(`¿Estás seguro de que quieres cerrar la sesión ${sessionId}?`)) {
+        return;
+    }
+
+    try {
+        const apiKey = localStorage.getItem('apiKey') || API_KEY;
+        const response = await fetch(`${BASE_URL}/api/logout/${sessionId}`, {
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(`Sesión ${sessionId} cerrada exitosamente`, 'success');
+            // Refresh sessions list if we're on sessions page
+            if (document.getElementById('sessions-content').classList.contains('active')) {
+                loadSessionsManagement();
+            }
+            // Refresh dashboard data
+            loadDashboardData();
+        } else {
+            showNotification(`Error: ${data.error}`, 'danger');
+        }
+    } catch (error) {
+        console.error('Error cerrando sesión:', error);
+        showNotification('Error de conexión', 'danger');
+    }
 }
 
 // Navigation handling
@@ -532,6 +647,9 @@ function displaySessionsManagement(sessions) {
                     <div class="d-flex gap-2">
                         <button class="btn btn-sm btn-outline-primary" onclick="viewSession('${session.id || session.sessionId}')">
                             <i class="fas fa-eye me-1"></i>Ver
+                        </button>
+                        <button class="btn btn-sm btn-outline-warning" onclick="logoutSession('${session.id || session.sessionId}')">
+                            <i class="fas fa-sign-out-alt me-1"></i>Cerrar
                         </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteSession('${session.id || session.sessionId}')">
                             <i class="fas fa-trash me-1"></i>Eliminar
@@ -1296,8 +1414,12 @@ function viewSession(sessionId) {
                                         
                                         <hr>
                                         
-                                        <button class="btn btn-danger" onclick="deleteSession('${sessionId}'); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
-                                            <i class="fas fa-trash me-2"></i>Eliminar Sesión
+                                         <button class="btn btn-warning" onclick="logoutSession('${sessionId}')">
+                                             <i class="fas fa-sign-out-alt me-2"></i>Cerrar Sesión WhatsApp
+                                         </button>
+                                         
+                                         <button class="btn btn-danger" onclick="deleteSession('${sessionId}'); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
+                                             <i class="fas fa-trash me-2"></i>Eliminar Sesión
                                         </button>
                                     </div>
                                 </div>
