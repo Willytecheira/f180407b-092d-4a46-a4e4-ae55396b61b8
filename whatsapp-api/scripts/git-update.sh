@@ -96,11 +96,21 @@ fi
 # Paso 6: Reiniciar aplicación con PM2
 echo -e "${YELLOW}🔄 Reiniciando aplicación...${NC}"
 if command -v pm2 &> /dev/null; then
-    pm2 reload whatsapp-api
+    echo -e "${YELLOW}🛑 Deteniendo instancia anterior...${NC}"
+    pm2 delete whatsapp-api 2>/dev/null || true
+    
+    echo -e "${YELLOW}🚀 Iniciando aplicación fresca...${NC}"
+    pm2 start ecosystem.config.js
+    
     if [ $? -ne 0 ]; then
-        echo -e "${YELLOW}⚠️  Reload falló, intentando restart...${NC}"
-        pm2 restart whatsapp-api
+        echo -e "${RED}❌ Error al iniciar con PM2${NC}"
+        echo -e "${YELLOW}🔄 Ejecutando rollback...${NC}"
+        bash scripts/rollback.sh
+        exit 1
     fi
+    
+    echo -e "${YELLOW}💾 Guardando configuración PM2...${NC}"
+    pm2 save
 else
     echo -e "${YELLOW}⚠️  PM2 no encontrado, reinicia manualmente la aplicación${NC}"
 fi
