@@ -17,7 +17,9 @@ module.exports = {
         CACHE_DIR: './.wwebjs_cache',
         AUTH_DIR: './.wwebjs_auth',
         DISABLE_HTTPS: 'false',
-        FORCE_HTTP: 'false'
+        FORCE_HTTP: 'false',
+        SOCKET_IO_ENABLED: 'true',
+        DASHBOARD_REFRESH_INTERVAL: '30000'
       },
       log_file: './logs/combined.log',
       out_file: './logs/out.log',
@@ -26,7 +28,11 @@ module.exports = {
       merge_logs: true,
       restart_delay: 4000,
       max_restarts: 10,
-      min_uptime: '10s'
+      min_uptime: '10s',
+      kill_timeout: 5000,
+      listen_timeout: 3000,
+      source_map_support: false,
+      instance_var: 'INSTANCE_ID'
     }
   ]
 };

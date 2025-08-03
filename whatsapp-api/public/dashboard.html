@@ -114,11 +114,14 @@
             padding: 1.5rem;
             margin-bottom: 1.5rem;
             box-shadow: 0 5px 15px rgba(0,0,0,0.08);
-            height: 400px; /* Fixed height to prevent infinite expansion */
+            min-height: 350px;
+            max-height: 400px;
+            overflow: hidden;
         }
         
         .chart-container canvas {
-            max-height: 300px !important; /* Ensure canvas doesn't overflow */
+            max-height: 280px !important;
+            max-width: 100% !important;
         }
         
         .tab-content {

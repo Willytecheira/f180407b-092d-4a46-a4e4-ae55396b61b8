@@ -21,29 +21,30 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: ['https://docker.website', 'http://localhost:3000', 'https://localhost:3000'],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || 'whatsapp-api-key-2024';
 
-// Middleware de seguridad - configuración simplificada sin HTTPS
+// Middleware de seguridad optimizado para docker.website
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginOpenerPolicy: false,
   crossOriginResourcePolicy: false,
-  hsts: false, // Deshabilitar HTTPS Strict Transport Security
+  hsts: process.env.NODE_ENV === 'production', // Habilitar HSTS solo en producción
   crossOriginEmbedderPolicy: false
 }));
 app.use(compression());
 app.use(morgan('combined'));
 app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
+  origin: ['https://docker.website', 'http://localhost:3000', 'https://localhost:3000'],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["*"],
-  credentials: false
+  credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -205,9 +206,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Socket.IO para tiempo real
+// Socket.IO para tiempo real con broadcasting mejorado
 io.on('connection', (socket) => {
-  console.log('Cliente conectado:', socket.id);
+  console.log('✅ Cliente conectado:', socket.id);
+  
+  // Join to dashboard updates
+  socket.join('dashboard');
   
   socket.on('join-session', (sessionId) => {
     socket.join(`session-${sessionId}`);
@@ -215,9 +219,43 @@ io.on('connection', (socket) => {
   });
   
   socket.on('disconnect', () => {
-    console.log('Cliente desconectado:', socket.id);
+    console.log('❌ Cliente desconectado:', socket.id);
+  });
+  
+  // Send initial data
+  socket.emit('dashboard-ready', { 
+    timestamp: new Date().toISOString(),
+    status: 'connected'
   });
 });
+
+// Función para broadcast de actualizaciones
+function broadcastUpdate(type, data) {
+  try {
+    io.to('dashboard').emit(type, {
+      type,
+      data,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error broadcasting update:', error);
+  }
+}
+
+// Configurar broadcasts periódicos de métricas
+setInterval(() => {
+  try {
+    if (io.engine.clientsCount > 0) {
+      const currentMetrics = metricsManager.getCurrentSystemMetrics();
+      broadcastUpdate('metrics-update', {
+        type: 'system',
+        metrics: currentMetrics
+      });
+    }
+  } catch (error) {
+    console.error('Error broadcasting metrics:', error);
+  }
+}, 30000); // Cada 30 segundos
 
 // Iniciar servidor
 server.listen(PORT, () => {

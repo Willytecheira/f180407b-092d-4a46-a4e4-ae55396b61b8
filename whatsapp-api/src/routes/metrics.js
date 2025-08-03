@@ -116,75 +116,114 @@ module.exports = (metricsManager, sessionManager) => {
   });
 
   // GET /api/metrics/dashboard - Resumen para dashboard
-  router.get('/dashboard', (req, res) => {
-  try {
-      const currentMetrics = metricsManager.getCurrentSystemMetrics() || {};
-      const health = metricsManager.getHealthStatus() || { status: 'unknown', alerts: [] };
-      const sessions = sessionManager.getAllSessions() || [];
+  router.get('/dashboard', async (req, res) => {
+    try {
+      console.log('📊 Generando datos del dashboard...');
       
-      // Calcular estadísticas rápidas
-      const connectedSessions = sessions.filter(s => s && s.status === 'connected');
+      // Obtener datos con fallbacks robustos
+      let currentMetrics, health, sessions;
       
-      // Calcular mensajes de forma más segura
-      let totalMessages = 0;
       try {
-        totalMessages = sessions.reduce((total, session) => {
-          if (!session || !session.sessionId) return total;
-          try {
-            const messages = sessionManager.getSessionMessages(session.sessionId, 100);
-            return total + (Array.isArray(messages) ? messages.length : 0);
-          } catch (msgError) {
-            return total;
-          }
-        }, 0);
-      } catch (msgError) {
-        console.error('Error calculating total messages:', msgError);
-        totalMessages = 0;
+        currentMetrics = metricsManager.getCurrentSystemMetrics();
+        console.log('✅ Métricas del sistema obtenidas');
+      } catch (error) {
+        console.error('❌ Error obteniendo métricas del sistema:', error);
+        currentMetrics = {
+          memory: { usage: 0, process: { heapUsage: 0 } },
+          cpu: { cores: 1, loadAverage: [0, 0, 0] },
+          uptime: { formatted: '0m' }
+        };
       }
       
-      console.log('📈 Stats calculated - Connected:', connectedSessions.length, 'Total msgs:', totalMessages);
-
-      // Obtener métricas de las últimas 24 horas para trends
-      const historical = metricsManager.getHistoricalMetrics(24);
-      console.log('📈 Historical data:', historical);
+      try {
+        health = metricsManager.getHealthStatus();
+        console.log('✅ Estado de salud obtenido');
+      } catch (error) {
+        console.error('❌ Error obteniendo estado de salud:', error);
+        health = { status: 'healthy', alerts: [] };
+      }
       
-      // Generar datos de memoria en tiempo real si no hay históricos
-      const memoryTrends = historical?.data?.length > 0 
-        ? historical.data.slice(-24).map(d => ({
-            timestamp: d.timestamp,
-            usage: ((d.memory.used / d.memory.total) * 100).toFixed(2)
-          }))
-        : [{
-            timestamp: new Date().toISOString(),
-            usage: currentMetrics?.memory?.usage?.toFixed(2) || '0'
-          }];
+      try {
+        sessions = sessionManager.getAllSessions() || [];
+        console.log('✅ Sesiones obtenidas:', sessions.length);
+      } catch (error) {
+        console.error('❌ Error obteniendo sesiones:', error);
+        sessions = [];
+      }
+      
+      // Calcular estadísticas con manejo seguro de errores
+      const connectedSessions = sessions.filter(s => s && s.status === 'connected');
+      const activeSessions = connectedSessions.length;
+      
+      let totalMessages = 0;
+      sessions.forEach(session => {
+        if (session && session.sessionId) {
+          try {
+            totalMessages += session.messageCount || 0;
+          } catch (error) {
+            console.warn('Error calculando mensajes para sesión:', session.sessionId);
+          }
+        }
+      });
+      
+      console.log('📈 Estadísticas calculadas:', {
+        total: sessions.length,
+        active: activeSessions,
+        messages: totalMessages
+      });
 
-      // Generar datos de sesiones en tiempo real si no hay históricos  
-      const sessionTrends = historical?.data?.length > 0
-        ? historical.data.slice(-24).map(d => ({
+      // Obtener datos históricos con fallback
+      let memoryTrends = [];
+      let sessionTrends = [];
+      
+      try {
+        const historical = metricsManager.getHistoricalMetrics(24);
+        if (historical && historical.data && historical.data.length > 0) {
+          memoryTrends = historical.data.slice(-24).map(d => ({
+            timestamp: d.timestamp,
+            usage: parseFloat(((d.memory.used / d.memory.total) * 100).toFixed(2))
+          }));
+          
+          sessionTrends = historical.data.slice(-24).map(d => ({
             timestamp: d.timestamp,
             active: d.sessions?.active || 0
-          }))
-        : [{
-            timestamp: new Date().toISOString(),
-            active: connectedSessions.length
-          }];
+          }));
+        }
+      } catch (error) {
+        console.warn('❌ Error obteniendo datos históricos:', error);
+      }
       
+      // Si no hay datos históricos, crear punto actual
+      if (memoryTrends.length === 0) {
+        memoryTrends = [{
+          timestamp: new Date().toISOString(),
+          usage: parseFloat(currentMetrics.memory?.usage || 0)
+        }];
+      }
+      
+      if (sessionTrends.length === 0) {
+        sessionTrends = [{
+          timestamp: new Date().toISOString(),
+          active: activeSessions
+        }];
+      }
+      
+      // Construir respuesta del dashboard
       const dashboard = {
         overview: {
-          totalSessions: sessions.length || 0,
-          activeSessions: connectedSessions.length || 0,
-          totalMessages: totalMessages || 0,
-          uptime: (currentMetrics && currentMetrics.uptime && currentMetrics.uptime.formatted) || '0m',
-          systemStatus: (health && health.status) || 'healthy'
+          totalSessions: sessions.length,
+          activeSessions: activeSessions,
+          totalMessages: totalMessages,
+          uptime: currentMetrics.uptime?.formatted || '0m',
+          systemStatus: health.status || 'healthy'
         },
         resources: {
-          memoryUsage: (currentMetrics && currentMetrics.memory && currentMetrics.memory.usage) || 0,
-          heapUsage: (currentMetrics && currentMetrics.memory && currentMetrics.memory.process && currentMetrics.memory.process.heapUsage) || 0,
-          cpuCores: (currentMetrics && currentMetrics.cpu && currentMetrics.cpu.cores) || 1,
-          loadAverage: (currentMetrics && currentMetrics.cpu && currentMetrics.cpu.loadAverage) || [0, 0, 0]
+          memoryUsage: parseFloat(currentMetrics.memory?.usage || 0),
+          heapUsage: parseFloat(currentMetrics.memory?.process?.heapUsage || 0),
+          cpuCores: currentMetrics.cpu?.cores || 1,
+          loadAverage: currentMetrics.cpu?.loadAverage || [0, 0, 0]
         },
-        sessions: sessions.map(session => ({
+        sessions: sessions.slice(0, 10).map(session => ({
           id: session.sessionId || 'unknown',
           status: session.status || 'disconnected',
           connectedAt: session.connectedAt || new Date().toISOString(),
@@ -195,19 +234,43 @@ module.exports = (metricsManager, sessionManager) => {
           memory: memoryTrends,
           sessions: sessionTrends
         },
-        alerts: health?.alerts || []
+        alerts: health.alerts || []
       };
       
-      console.log('📊 Final dashboard:', dashboard);
+      console.log('📊 Dashboard preparado exitosamente');
 
       res.json({
         success: true,
         dashboard
       });
+      
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        error: error.message
+      console.error('💥 Error crítico en dashboard:', error);
+      
+      // Respuesta de emergencia
+      res.json({
+        success: true,
+        dashboard: {
+          overview: {
+            totalSessions: 0,
+            activeSessions: 0,
+            totalMessages: 0,
+            uptime: '0m',
+            systemStatus: 'unknown'
+          },
+          resources: {
+            memoryUsage: 0,
+            heapUsage: 0,
+            cpuCores: 1,
+            loadAverage: [0, 0, 0]
+          },
+          sessions: [],
+          trends: {
+            memory: [{ timestamp: new Date().toISOString(), usage: 0 }],
+            sessions: [{ timestamp: new Date().toISOString(), active: 0 }]
+          },
+          alerts: ['Error cargando datos del sistema']
+        }
       });
     }
   });

@@ -14,10 +14,53 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeCharts();
     loadDashboardData();
     setupRealTimeUpdates();
+    setupNavigation();
     
     // Auto-refresh every 30 seconds
     setInterval(loadDashboardData, 30000);
 });
+
+// Setup navigation
+function setupNavigation() {
+    const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Remove active class from all links and content
+            navLinks.forEach(l => l.classList.remove('active'));
+            tabContents.forEach(tc => tc.classList.remove('active'));
+            
+            // Add active class to clicked link
+            this.classList.add('active');
+            
+            // Show corresponding content
+            const target = this.getAttribute('href').substring(1);
+            const targetContent = document.getElementById(target + '-content');
+            if (targetContent) {
+                targetContent.classList.add('active');
+                
+                // Load specific content based on section
+                switch(target) {
+                    case 'sessions':
+                        loadSessionsManagement();
+                        break;
+                    case 'users':
+                        loadUsersManagement();
+                        break;
+                    case 'system':
+                        loadSystemInfo();
+                        break;
+                    case 'webhooks':
+                        loadWebhooksManagement();
+                        break;
+                }
+            }
+        });
+    });
+}
 
 // Authentication check
 function checkAuthentication() {
@@ -130,42 +173,39 @@ function initializeCharts() {
 // Load dashboard data
 async function loadDashboardData() {
     try {
-        console.log('🔄 Iniciando carga de datos del dashboard...');
+        console.log('🔄 Cargando datos del dashboard...');
         showLoading('Cargando datos del dashboard...', true);
         
         const apiKey = localStorage.getItem('apiKey') || API_KEY;
-        console.log('🔑 API Key encontrada:', apiKey ? 'SÍ' : 'NO');
         
         const response = await fetch(`${BASE_URL}/api/metrics/dashboard`, {
+            method: 'GET',
             headers: {
-                'x-api-key': apiKey
-            }
+                'x-api-key': apiKey,
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include'
         });
 
-        console.log('📡 Respuesta del servidor:', response.status, response.statusText);
+        console.log('📡 Respuesta HTTP:', response.status);
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Error HTTP:', response.status, errorText);
-            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const data = await response.json();
-        console.log('📊 Datos recibidos:', data);
+        console.log('📊 Dashboard data received:', !!data.dashboard);
         
-        if (data.success) {
-            console.log('✅ Dashboard data:', data.dashboard);
+        if (data.success && data.dashboard) {
             updateDashboard(data.dashboard);
+            console.log('✅ Dashboard actualizado exitosamente');
         } else {
-            console.error('❌ Error en respuesta:', data.error);
-            // Try fallback data loading
-            loadBasicMetrics();
+            throw new Error(data.error || 'No dashboard data received');
         }
     } catch (error) {
-        console.error('💥 Error loading dashboard data:', error);
-        showNotification('Error cargando datos del dashboard: ' + error.message, 'error');
-        // Try fallback data loading
-        loadBasicMetrics();
+        console.error('💥 Error cargando dashboard:', error);
+        showNotification('Cargando datos básicos...', 'info');
+        await loadBasicMetrics(); // Usar fallback
     } finally {
         hideLoading();
     }
@@ -234,79 +274,85 @@ async function loadBasicMetrics() {
 
 // Update dashboard with new data
 function updateDashboard(dashboard) {
-    console.log('🎯 Actualizando dashboard con datos:', dashboard);
+    console.log('🎯 Actualizando dashboard...');
     
-    // Verificar estructura de datos
-    if (!dashboard || !dashboard.overview) {
-        console.error('❌ Estructura de datos incorrecta:', dashboard);
-        showNotification('Error: Datos del dashboard incompletos', 'error');
+    if (!dashboard) {
+        console.error('❌ No dashboard data provided');
         return;
     }
     
-    // Update overview statistics
-    document.getElementById('totalSessions').textContent = dashboard.overview.totalSessions || 0;
-    document.getElementById('activeSessions').textContent = dashboard.overview.activeSessions || 0;
-    document.getElementById('totalMessages').textContent = dashboard.overview.totalMessages || 0;
-    document.getElementById('systemUptime').textContent = dashboard.overview.uptime || '0m';
+    // Update overview statistics with fallbacks
+    const overview = dashboard.overview || {};
+    document.getElementById('totalSessions').textContent = overview.totalSessions || 0;
+    document.getElementById('activeSessions').textContent = overview.activeSessions || 0;
+    document.getElementById('totalMessages').textContent = overview.totalMessages || 0;
+    document.getElementById('systemUptime').textContent = overview.uptime || '0m';
 
-    // Update system resources
-    const memoryUsage = parseFloat(dashboard.resources.memoryUsage) || 0;
-    const heapUsage = parseFloat(dashboard.resources.heapUsage) || 0;
+    // Update system resources with fallbacks
+    const resources = dashboard.resources || {};
+    const memoryUsage = parseFloat(resources.memoryUsage) || 0;
+    const heapUsage = parseFloat(resources.heapUsage) || 0;
     
     document.getElementById('memoryUsage').textContent = memoryUsage.toFixed(1) + '%';
     document.getElementById('heapUsage').textContent = heapUsage.toFixed(1) + '%';
-    document.getElementById('cpuCores').textContent = dashboard.resources.cpuCores || 0;
-    document.getElementById('loadAverage').textContent = (dashboard.resources.loadAverage[0] || 0).toFixed(2);
+    document.getElementById('cpuCores').textContent = resources.cpuCores || 1;
+    document.getElementById('loadAverage').textContent = (resources.loadAverage?.[0] || 0).toFixed(2);
 
     // Update progress bars
-    document.getElementById('memoryProgress').style.width = memoryUsage + '%';
-    document.getElementById('heapProgress').style.width = heapUsage + '%';
+    document.getElementById('memoryProgress').style.width = Math.min(memoryUsage, 100) + '%';
+    document.getElementById('heapProgress').style.width = Math.min(heapUsage, 100) + '%';
 
-    // Update memory chart
-    if (dashboard.trends && dashboard.trends.memory && dashboard.trends.memory.length > 0) {
-        const labels = dashboard.trends.memory.map(point => {
-            const date = new Date(point.timestamp);
-            return date.getHours().toString().padStart(2, '0') + ':' + 
-                   date.getMinutes().toString().padStart(2, '0');
-        });
-        const data = dashboard.trends.memory.map(point => parseFloat(point.usage));
+    // Update memory chart with error handling
+    try {
+        if (dashboard.trends?.memory?.length > 0) {
+            const memoryData = dashboard.trends.memory;
+            const labels = memoryData.map(point => {
+                const date = new Date(point.timestamp);
+                return date.getHours().toString().padStart(2, '0') + ':' + 
+                       date.getMinutes().toString().padStart(2, '0');
+            });
+            const data = memoryData.map(point => parseFloat(point.usage) || 0);
 
-        memoryChart.data.labels = labels;
-        memoryChart.data.datasets[0].data = data;
-        memoryChart.update('none');
+            memoryChart.data.labels = labels;
+            memoryChart.data.datasets[0].data = data;
+            memoryChart.update('none');
+        }
+    } catch (error) {
+        console.error('Error updating memory chart:', error);
     }
 
-    // Update sessions chart
-    const statusCounts = {
-        connected: 0,
-        disconnected: 0,
-        initializing: 0
-    };
+    // Update sessions chart with error handling
+    try {
+        const statusCounts = { connected: 0, disconnected: 0, initializing: 0 };
 
-    if (dashboard.sessions) {
-        dashboard.sessions.forEach(session => {
-            if (session.status === 'connected') {
-                statusCounts.connected++;
-            } else if (session.status === 'disconnected') {
-                statusCounts.disconnected++;
-            } else {
-                statusCounts.initializing++;
-            }
-        });
+        if (dashboard.sessions && Array.isArray(dashboard.sessions)) {
+            dashboard.sessions.forEach(session => {
+                const status = session.status || 'disconnected';
+                if (status === 'connected') {
+                    statusCounts.connected++;
+                } else if (status === 'disconnected') {
+                    statusCounts.disconnected++;
+                } else {
+                    statusCounts.initializing++;
+                }
+            });
+        }
+
+        sessionsChart.data.datasets[0].data = [
+            statusCounts.connected,
+            statusCounts.disconnected,
+            statusCounts.initializing
+        ];
+        sessionsChart.update('none');
+    } catch (error) {
+        console.error('Error updating sessions chart:', error);
     }
 
-    sessionsChart.data.datasets[0].data = [
-        statusCounts.connected,
-        statusCounts.disconnected,
-        statusCounts.initializing
-    ];
-    sessionsChart.update('none');
-
-    // Update alerts
+    // Update alerts and sessions list
     updateAlerts(dashboard.alerts || []);
-
-    // Update sessions list
     updateSessionsList(dashboard.sessions || []);
+    
+    console.log('✅ Dashboard actualizado correctamente');
 }
 
 // Update alerts
@@ -367,24 +413,42 @@ function updateSessionsList(sessions) {
 // Setup real-time updates
 function setupRealTimeUpdates() {
     socket.on('connect', () => {
-        console.log('Connected to real-time updates');
+        console.log('✅ Conectado a actualizaciones en tiempo real');
+        showNotification('Conectado al servidor en tiempo real', 'success');
     });
 
     socket.on('disconnect', () => {
-        console.log('Disconnected from real-time updates');
+        console.log('❌ Desconectado de actualizaciones en tiempo real');
+        showNotification('Desconectado del servidor', 'warning');
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('❌ Error de conexión Socket.IO:', error);
     });
 
     socket.on('session-update', (data) => {
-        // Refresh data when sessions change
-        loadDashboardData();
+        console.log('📱 Actualización de sesión recibida:', data);
+        // Refresh data when sessions change (throttled)
+        throttledRefresh();
     });
 
     socket.on('metrics-update', (data) => {
+        console.log('📊 Actualización de métricas recibida');
         // Update specific metrics without full refresh
-        if (data.type === 'system') {
+        if (data && data.type === 'system' && data.metrics) {
             updateSystemMetrics(data.metrics);
         }
     });
+}
+
+// Throttled refresh to prevent too many requests
+let refreshTimeout;
+function throttledRefresh() {
+    if (refreshTimeout) return;
+    refreshTimeout = setTimeout(() => {
+        loadDashboardData();
+        refreshTimeout = null;
+    }, 5000); // Wait 5 seconds between refreshes
 }
 
 // Update system metrics in real-time
