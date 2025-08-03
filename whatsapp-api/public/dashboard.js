@@ -1122,7 +1122,194 @@ function createNewSession() {
 }
 
 function viewSession(sessionId) {
-    showNotification('Función de vista de sesión en desarrollo', 'info');
+    showLoading('Cargando información de la sesión...', true);
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    // Obtener información de la sesión y métricas
+    Promise.all([
+        fetch(`/api/${sessionId}/status`, {
+            headers: { 'X-API-Key': apiKey }
+        }),
+        fetch(`/api/${sessionId}/webhook`, {
+            headers: { 'X-API-Key': apiKey }
+        }),
+        fetch(`/api/metrics`, {
+            headers: { 'X-API-Key': apiKey }
+        })
+    ])
+    .then(responses => Promise.all(responses.map(r => r.json())))
+    .then(([sessionData, webhookData, metricsData]) => {
+        hideLoading();
+        
+        const session = sessionData.success ? sessionData : {};
+        const webhook = webhookData.success ? webhookData : {};
+        const metrics = metricsData.success ? metricsData : {};
+        
+        const modal = `
+            <div class="modal fade" id="viewSessionModal" tabindex="-1" style="backdrop-filter: blur(5px);">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-mobile-alt me-2"></i>Sesión: ${sessionId}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <ul class="nav nav-tabs" id="sessionTabs" role="tablist">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="info-tab" data-bs-toggle="tab" data-bs-target="#info" type="button" role="tab">
+                                        <i class="fas fa-info-circle me-1"></i>Información
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="messages-tab" data-bs-toggle="tab" data-bs-target="#messages" type="button" role="tab">
+                                        <i class="fas fa-comments me-1"></i>Mensajes
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="webhook-tab" data-bs-toggle="tab" data-bs-target="#webhook" type="button" role="tab">
+                                        <i class="fas fa-link me-1"></i>Webhook
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="actions-tab" data-bs-toggle="tab" data-bs-target="#actions" type="button" role="tab">
+                                        <i class="fas fa-cogs me-1"></i>Acciones
+                                    </button>
+                                </li>
+                            </ul>
+                            
+                            <div class="tab-content mt-3" id="sessionTabContent">
+                                <!-- Información General -->
+                                <div class="tab-pane fade show active" id="info" role="tabpanel">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-signal me-2"></i>Estado de Conexión</h6>
+                                            <div class="mb-3">
+                                                <span class="badge ${session.connected ? 'bg-success' : 'bg-danger'} fs-6">
+                                                    <i class="fas ${session.connected ? 'fa-check-circle' : 'fa-times-circle'} me-1"></i>
+                                                    ${session.connected ? 'Conectado' : 'Desconectado'}
+                                                </span>
+                                            </div>
+                                            
+                                            <h6><i class="fas fa-phone me-2"></i>Número WhatsApp</h6>
+                                            <p class="text-muted">${session.phoneNumber || 'No disponible'}</p>
+                                            
+                                            <h6><i class="fas fa-clock me-2"></i>Conexión</h6>
+                                            <p class="text-muted">${session.connectedAt ? new Date(session.connectedAt).toLocaleString() : 'No conectado'}</p>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-chart-bar me-2"></i>Estadísticas</h6>
+                                            <div class="row text-center">
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 mb-2">
+                                                        <h5 class="text-primary mb-0">${metrics.messagesSent || 0}</h5>
+                                                        <small class="text-muted">Enviados</small>
+                                                    </div>
+                                                </div>
+                                                <div class="col-6">
+                                                    <div class="border rounded p-2 mb-2">
+                                                        <h5 class="text-success mb-0">${metrics.messagesReceived || 0}</h5>
+                                                        <small class="text-muted">Recibidos</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <h6><i class="fas fa-memory me-2"></i>Recursos</h6>
+                                            <p class="text-muted">
+                                                Memoria: ${metrics.memoryUsage?.rss ? Math.round(metrics.memoryUsage.rss / 1024 / 1024) + ' MB' : 'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Mensajes Recientes -->
+                                <div class="tab-pane fade" id="messages" role="tabpanel">
+                                    <div id="recentMessages">
+                                        <div class="text-center py-4">
+                                            <i class="fas fa-spinner fa-spin fa-2x text-muted mb-3"></i>
+                                            <p class="text-muted">Cargando mensajes recientes...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Configuración Webhook -->
+                                <div class="tab-pane fade" id="webhook" role="tabpanel">
+                                    ${webhook.webhookUrl ? `
+                                        <div class="alert alert-success">
+                                            <h6><i class="fas fa-check-circle me-2"></i>Webhook Configurado</h6>
+                                            <p class="mb-2"><strong>URL:</strong> ${webhook.webhookUrl}</p>
+                                            <p class="mb-0"><strong>Eventos:</strong> ${webhook.events?.join(', ') || 'Todos'}</p>
+                                        </div>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="editWebhook('${sessionId}')">
+                                            <i class="fas fa-edit me-1"></i>Editar Webhook
+                                        </button>
+                                    ` : `
+                                        <div class="alert alert-warning">
+                                            <h6><i class="fas fa-exclamation-triangle me-2"></i>Sin Webhook</h6>
+                                            <p class="mb-0">No hay webhook configurado para esta sesión</p>
+                                        </div>
+                                        <button class="btn btn-primary btn-sm" onclick="createWebhook(); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
+                                            <i class="fas fa-plus me-1"></i>Configurar Webhook
+                                        </button>
+                                    `}
+                                </div>
+                                
+                                <!-- Acciones -->
+                                <div class="tab-pane fade" id="actions" role="tabpanel">
+                                    <div class="d-grid gap-2">
+                                        ${!session.connected ? `
+                                            <button class="btn btn-success" onclick="reconnectSession('${sessionId}')">
+                                                <i class="fas fa-sync me-2"></i>Reconectar Sesión
+                                            </button>
+                                        ` : ''}
+                                        
+                                        <button class="btn btn-info" onclick="getSessionQR('${sessionId}')">
+                                            <i class="fas fa-qrcode me-2"></i>Obtener Código QR
+                                        </button>
+                                        
+                                        <button class="btn btn-warning" onclick="restartSession('${sessionId}')">
+                                            <i class="fas fa-redo me-2"></i>Reiniciar Sesión
+                                        </button>
+                                        
+                                        <hr>
+                                        
+                                        <button class="btn btn-danger" onclick="deleteSession('${sessionId}'); bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();">
+                                            <i class="fas fa-trash me-2"></i>Eliminar Sesión
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modal);
+        const modalElement = new bootstrap.Modal(document.getElementById('viewSessionModal'));
+        modalElement.show();
+        
+        // Cargar mensajes recientes cuando se seleccione la pestaña
+        document.getElementById('messages-tab').addEventListener('click', function() {
+            loadRecentMessages(sessionId);
+        });
+        
+        // Clean up modal when closed
+        document.getElementById('viewSessionModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error loading session details:', error);
+        showNotification('Error cargando información de la sesión', 'danger');
+    });
 }
 
 function deleteSession(sessionId) {
@@ -1255,6 +1442,187 @@ function createWebhook() {
     });
 }
 
+// Función para enviar la actualización del webhook editado
+function submitEditWebhook() {
+    const sessionId = document.getElementById('editWebhookSessionId').value;
+    const webhookUrl = document.getElementById('editWebhookUrl').value;
+    
+    if (!sessionId || !webhookUrl) {
+        showNotification('Por favor completa todos los campos', 'warning');
+        return;
+    }
+    
+    // Obtener eventos seleccionados
+    const events = [];
+    if (document.getElementById('editEventMessage').checked) events.push('message-received');
+    if (document.getElementById('editEventDelivered').checked) events.push('message-delivered');
+    if (document.getElementById('editEventFromMe').checked) events.push('message-from-me');
+    if (document.getElementById('editEventQr').checked) events.push('qr');
+    
+    showLoading('Actualizando webhook...', true);
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch(`/api/${sessionId}/webhook`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey
+        },
+        body: JSON.stringify({
+            url: webhookUrl,
+            events: events.length > 0 ? events : ['all']
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showNotification('Webhook actualizado exitosamente', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('editWebhookModal')).hide();
+            loadWebhooksManagement(); // Refresh the webhooks list
+        } else {
+            showNotification(`Error: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error updating webhook:', error);
+        showNotification('Error de conexión', 'danger');
+    });
+}
+
+// Función para cargar mensajes recientes de una sesión
+function loadRecentMessages(sessionId) {
+    const container = document.getElementById('recentMessages');
+    container.innerHTML = `
+        <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin fa-2x text-muted mb-3"></i>
+            <p class="text-muted">Cargando mensajes recientes...</p>
+        </div>
+    `;
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch(`/api/${sessionId}/messages`, {
+        headers: { 'X-API-Key': apiKey }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.messages && data.messages.length > 0) {
+            const messagesHtml = data.messages.slice(-20).map(msg => `
+                <div class="border rounded p-3 mb-2">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge ${msg.fromMe ? 'bg-primary' : 'bg-success'}">
+                            ${msg.fromMe ? 'Enviado' : 'Recibido'}
+                        </span>
+                        <small class="text-muted">${new Date(msg.timestamp * 1000).toLocaleString()}</small>
+                    </div>
+                    <p class="mb-1"><strong>De:</strong> ${msg.from}</p>
+                    <p class="mb-0">${msg.body}</p>
+                </div>
+            `).join('');
+            
+            container.innerHTML = messagesHtml;
+        } else {
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-2x text-muted mb-3"></i>
+                    <p class="text-muted">No hay mensajes recientes</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error loading messages:', error);
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <i class="fas fa-exclamation-triangle me-2"></i>Error cargando mensajes
+            </div>
+        `;
+    });
+}
+
+// Funciones adicionales para las acciones de sesión
+function reconnectSession(sessionId) {
+    showLoading('Reconectando sesión...', true);
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch(`/api/${sessionId}/restart`, {
+        method: 'POST',
+        headers: { 'X-API-Key': apiKey }
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showNotification('Sesión reconectándose...', 'success');
+            bootstrap.Modal.getInstance(document.getElementById('viewSessionModal')).hide();
+        } else {
+            showNotification(`Error: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error reconnecting session:', error);
+        showNotification('Error de conexión', 'danger');
+    });
+}
+
+function getSessionQR(sessionId) {
+    showLoading('Obteniendo código QR...', true);
+    
+    const apiKey = localStorage.getItem('apiKey') || API_KEY;
+    
+    fetch(`/api/${sessionId}/qr`, {
+        headers: { 'X-API-Key': apiKey }
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success && data.qr) {
+            const qrModal = `
+                <div class="modal fade" id="qrModal" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Código QR - ${sessionId}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body text-center">
+                                <img src="${data.qr}" class="img-fluid" alt="QR Code">
+                                <p class="mt-3 text-muted">Escanea este código QR con WhatsApp</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', qrModal);
+            const modalElement = new bootstrap.Modal(document.getElementById('qrModal'));
+            modalElement.show();
+            
+            document.getElementById('qrModal').addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
+        } else {
+            showNotification(data.error || 'No se pudo obtener el código QR', 'warning');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        console.error('Error getting QR:', error);
+        showNotification('Error de conexión', 'danger');
+    });
+}
+
+function restartSession(sessionId) {
+    if (confirm(`¿Estás seguro de que quieres reiniciar la sesión "${sessionId}"?`)) {
+        reconnectSession(sessionId);
+    }
+}
+
 function submitCreateWebhook() {
     const sessionId = document.getElementById('webhookSessionId').value;
     const webhookUrl = document.getElementById('webhookUrl').value;
@@ -1317,47 +1685,90 @@ function submitCreateWebhook() {
 }
 
 function editWebhook(sessionId) {
-    console.log('🎯 INICIO editWebhook - sessionId:', sessionId);
-    
     // Obtener configuración actual del webhook
     const apiKey = localStorage.getItem('apiKey') || API_KEY;
-    console.log('🔑 API Key obtenida:', apiKey ? 'Presente' : 'No encontrada');
     
-    const url = `/api/${sessionId}/webhook`;
-    console.log('🌐 URL a consultar:', url);
-    
-    fetch(url, {
+    fetch(`/api/${sessionId}/webhook`, {
         method: 'GET',
         headers: {
             'X-API-Key': apiKey
         }
     })
     .then(response => {
-        console.log('📡 Respuesta HTTP:', {
-            status: response.status,
-            statusText: response.statusText,
-            ok: response.ok,
-            headers: [...response.headers.entries()]
-        });
-        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
         return response.json();
     })
     .then(data => {
-        console.log('📦 Datos JSON recibidos:', JSON.stringify(data, null, 2));
-        
-        if (data.success) {
-            if (data.webhookUrl) {
-                console.log('✅ Webhook encontrado, procediendo a editar...');
-                
-                // Crear el modal para editar (reutilizar el modal de creación)
-                createWebhookForSession(sessionId);
-                
-                // Esperar a que el modal se cree y luego rellenar con datos actuales
-                setTimeout(() => {
+        if (data.success && data.webhookUrl) {
+            // Crear modal de edición directamente
+            const modal = `
+                <div class="modal fade" id="editWebhookModal" tabindex="-1" style="backdrop-filter: blur(5px);">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Editar Webhook - ${sessionId}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form id="editWebhookForm">
+                                    <input type="hidden" id="editWebhookSessionId" value="${sessionId}">
+                                    <div class="mb-3">
+                                        <label for="editWebhookUrl" class="form-label">URL del Webhook</label>
+                                        <input type="url" class="form-control" id="editWebhookUrl" required 
+                                               value="${data.webhookUrl}" placeholder="https://tu-dominio.com/webhook">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Eventos</label>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="message-received" 
+                                                   id="editEventMessage" ${data.events?.includes('message-received') || data.events?.includes('all') ? 'checked' : ''}>
+                                            <label class="form-check-label" for="editEventMessage">
+                                                Mensajes recibidos
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="message-delivered" 
+                                                   id="editEventDelivered" ${data.events?.includes('message-delivered') || data.events?.includes('all') ? 'checked' : ''}>
+                                            <label class="form-check-label" for="editEventDelivered">
+                                                Mensajes entregados
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="message-from-me" 
+                                                   id="editEventFromMe" ${data.events?.includes('message-from-me') || data.events?.includes('all') ? 'checked' : ''}>
+                                            <label class="form-check-label" for="editEventFromMe">
+                                                Mensajes enviados por mí
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" value="qr" 
+                                                   id="editEventQr" ${data.events?.includes('qr') || data.events?.includes('all') ? 'checked' : ''}>
+                                            <label class="form-check-label" for="editEventQr">
+                                                Código QR
+                                            </label>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="button" class="btn btn-primary" onclick="submitEditWebhook()">Actualizar Webhook</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', modal);
+            const modalElement = new bootstrap.Modal(document.getElementById('editWebhookModal'));
+            modalElement.show();
+            
+            // Clean up modal when closed
+            document.getElementById('editWebhookModal').addEventListener('hidden.bs.modal', function () {
+                this.remove();
+            });
                     console.log('⏰ Intentando rellenar el modal...');
                     
                     // Verificar que los elementos existen antes de usarlos
