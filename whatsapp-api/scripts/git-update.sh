@@ -18,7 +18,19 @@ echo -e "${BLUE}📋 Iniciando proceso de actualización...${NC}"
 # Verificar si estamos en un repositorio git
 if [ ! -d ".git" ]; then
     echo -e "${RED}❌ Error: No es un repositorio Git${NC}"
-    exit 1
+    echo -e "${YELLOW}💡 Configurando repositorio automáticamente...${NC}"
+    
+    # Inicializar Git si no existe
+    git init
+    git remote add origin https://github.com/Willytecheira/f180407b-092d-4a46-a4e4-ae55396b61b8.git
+    
+    # Configurar usuario si no está configurado
+    if [ -z "$(git config user.name)" ]; then
+        git config user.name "WhatsApp API Server"
+        git config user.email "admin@whatsapp-api.local"
+    fi
+    
+    echo -e "${GREEN}✅ Repositorio Git configurado${NC}"
 fi
 
 # Paso 1: Crear backup de datos críticos
