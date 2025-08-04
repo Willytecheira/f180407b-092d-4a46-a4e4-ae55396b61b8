@@ -3,7 +3,7 @@ module.exports = {
     {
       name: 'whatsapp-api',
       script: 'server.js',
-      cwd: '/root/whatsapp-api',
+      cwd: '/root/whatsapp-api/whatsapp-api',
       instances: 1,
       exec_mode: 'fork',
       watch: false,
