@@ -7,14 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Plus, QrCode, Smartphone, Trash2, LogOut, Search, RefreshCw, Zap, XCircle, CheckCircle } from 'lucide-react';
+import { Plus, QrCode, Smartphone, Trash2, LogOut, Search, RefreshCw, Zap, XCircle, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface WhatsAppSession {
   id: string;
   name: string;
-  status: 'connected' | 'connecting' | 'disconnected' | 'qr-pending';
+  status: 'connected' | 'connecting' | 'disconnected' | 'qr-pending' | 'authenticated' | 'auth_failure' | 'initializing';
   phoneNumber?: string;
   lastActivity: string;
   messagesCount: number;
@@ -51,10 +51,34 @@ export const Sessions: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setSessions(data.sessions);
+        setSessions(data.sessions || []);
       } else {
-        // Generate demo data for development
-        generateDemoSessions();
+        // Fallback to real API call to whatsapp-api backend
+        try {
+          const backendResponse = await fetch('/api/get-sessions');
+          if (backendResponse.ok) {
+            const backendData = await backendResponse.json();
+            const formattedSessions: WhatsAppSession[] = Object.entries(backendData.sessions || {}).map(([id, session]: [string, any]) => ({
+              id,
+              name: id,
+              status: (session.status === 'authenticated' ? 'authenticated' : 
+                      session.status === 'connected' ? 'connected' :
+                      session.status === 'qr_ready' ? 'qr-pending' :
+                      session.status === 'disconnected' ? 'disconnected' :
+                      session.status === 'initializing' ? 'connecting' : 'disconnected') as WhatsAppSession['status'],
+              phoneNumber: session.status === 'connected' ? session.phoneNumber : undefined,
+              lastActivity: session.connectedAt || new Date().toISOString(),
+              messagesCount: 0,
+              createdAt: new Date().toISOString(),
+              qrCode: session.qr
+            }));
+            setSessions(formattedSessions);
+          } else {
+            generateDemoSessions();
+          }
+        } catch (backendError) {
+          generateDemoSessions();
+        }
       }
     } catch (error) {
       generateDemoSessions();
@@ -77,7 +101,7 @@ export const Sessions: React.FC = () => {
       {
         id: 'session-2',
         name: 'Sales Team',
-        status: 'connecting',
+        status: 'authenticated',
         lastActivity: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
         messagesCount: 89,
         createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString()
@@ -190,10 +214,15 @@ export const Sessions: React.FC = () => {
     switch (status) {
       case 'connected':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'authenticated':
+        return <Zap className="h-4 w-4 text-orange-500" />;
       case 'connecting':
+      case 'initializing':
         return <RefreshCw className="h-4 w-4 text-yellow-500 animate-spin" />;
       case 'qr-pending':
         return <QrCode className="h-4 w-4 text-blue-500" />;
+      case 'auth_failure':
+        return <AlertTriangle className="h-4 w-4 text-red-600" />;
       case 'disconnected':
         return <XCircle className="h-4 w-4 text-red-500" />;
       default:
@@ -204,15 +233,28 @@ export const Sessions: React.FC = () => {
   const getStatusBadge = (status: WhatsAppSession['status']) => {
     const variants = {
       connected: 'default',
+      authenticated: 'secondary',
       connecting: 'secondary',
+      initializing: 'secondary',
       'qr-pending': 'outline',
+      'auth_failure': 'destructive',
       disconnected: 'destructive'
     } as const;
 
+    const statusText = {
+      connected: 'CONECTADO',
+      authenticated: 'AUTENTICADO',
+      connecting: 'CONECTANDO',
+      initializing: 'INICIALIZANDO',
+      'qr-pending': 'ESCANEAR QR',
+      'auth_failure': 'ERROR AUTH',
+      disconnected: 'DESCONECTADO'
+    };
+
     return (
-      <Badge variant={variants[status]} className="flex items-center gap-1">
+      <Badge variant={variants[status] || 'secondary'} className="flex items-center gap-1">
         {getStatusIcon(status)}
-        {status.replace('-', ' ').toUpperCase()}
+        {statusText[status] || status.toUpperCase()}
       </Badge>
     );
   };
